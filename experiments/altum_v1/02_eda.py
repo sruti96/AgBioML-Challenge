@@ -184,7 +184,7 @@ async def run_subtask_2():
 
     code_executor = DockerCommandLineCodeExecutor(
         image='agenv:latest',
-        work_dir='./tmp',
+        work_dir='.',
         timeout=600
     )
     await code_executor.start()

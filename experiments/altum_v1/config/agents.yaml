@@ -275,15 +275,20 @@ agents:
 
       HANDLING PLOTS AND VISUALIZATIONS:
       1. When creating plots, save them to the current working directory with a descriptive filename
-      2. After saving a plot, use the read_plot tool to read and analyze its contents
-      3. Example workflow for plots:
+      2. After saving a plot, you can analyze it using the analyze_plot tool in two ways:
+         a. Use the default analysis by just providing the filename
+         b. Provide a custom prompt to ask specific questions about the plot
+      3. Example workflows for plots:
          ```
-         THOUGHT: I need to create a histogram of age distribution
-         ACTION: [Code to create and save the plot]
-         OBSERVATION: [Code execution result]
-         THOUGHT: Now I need to analyze the plot
-         ACTION: read_plot("age_distribution.png")
-         OBSERVATION: [Plot contents]
+         # Default analysis
+         THOUGHT: I need to analyze this distribution plot
+         ACTION: analyze_plot("distribution.png")
+         OBSERVATION: [Analysis results]
+         
+         # Custom analysis
+         THOUGHT: I need to check if there are any outliers in this plot
+         ACTION: analyze_plot("distribution.png", "Are there any outliers in this distribution? If so, what are their approximate values?")
+         OBSERVATION: [Analysis results]
          ```
 
       When writing code:
@@ -323,6 +328,38 @@ agents:
       END
       ```
 
+            IMPORTANT CODING RULES:
+      1. When writing code that should be executed:
+         - ALWAYS use a code block with a language specified. The only valid language is bash.
+         - NEVER use plaintext blocks (``` or ```plaintext) for code
+      2. When writing non-executable text:
+         - Use regular text without any code block markers
+         - This includes thoughts, observations, and tool calls
+      3. Example of correct usage:
+         ```
+         THOUGHT: I need to create a histogram
+         ACTION: 
+          ```bash
+          #!/bin/bash
+
+          # Ensure conda is set up in the shell
+          eval "$(conda shell.bash hook)"
+
+          # Activate the conda environment
+          conda activate <environment-name>
+
+          # Run the Python code
+          python - <<END
+          import matplotlib.pyplot as plt
+          plt.hist(data)
+          plt.savefig("histogram.png")
+          END
+          ```
+          OBSERVATION: Plot saved successfully
+          THOUGHT: Now I need to analyze the distribution
+          ACTION: analyze_plot("histogram.png", "Are there any outliers in this distribution? If so, what are their approximate values?")
+          ```
+
       A couple additional notes:
       - We are using a newer version of keras so you import it as `keras` instead of `tensorflow.keras`.
       - The data files are in the same directory as the code executor, so use simple filenames like 'betas.arrow' and 'metadata.arrow'
@@ -335,6 +372,6 @@ agents:
       Anything the other agents can plan, the engineer can deploy into code. 
       The engineer will also have access to a code runner tool that can execute code and return the output.
     tools:
-      - read_plot
+      - analyze_plot
 
 

@@ -6,13 +6,15 @@ from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup
 import re
+from PIL import Image as PILImage
 
 load_dotenv()
 
-from autogen_ext.agents.file_surfer import FileSurfer
 from autogen_core.tools import FunctionTool
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-
+from autogen_agentchat.messages import MultiModalMessage
+from autogen_core import Image
+from autogen_agentchat.agents import AssistantAgent
 
 YOUR_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
@@ -110,41 +112,83 @@ async def format_webpage(url: str) -> str:
     except Exception as e:
         return f"Error processing citation: {str(e)}"
 
-async def read_plot_file(filepath: str) -> str:
+
+async def analyze_plot_file(filepath: str, prompt: str | None = None) -> str:
     """
-    Read and return the contents of a plot file.
+    Analyze a plot file and return a description of its contents.
     
     Args:
         filepath: Path to the plot file (relative to the working directory)
+        prompt: Optional custom prompt to ask about the plot. If None, uses a default prompt.
         
     Returns:
-        A string containing the plot file contents or an error message
+        A string containing the analysis of the plot or an error message
     """
     try:
-        # Initialize FileSurfer agent
-        model_client = OpenAIChatCompletionClient(model="gpt-4o")
-        file_surfer = FileSurfer(
-            name="plot_reader",
-            model_client=model_client,
-            base_path=os.getcwd()  # Use current working directory
+        # Initialize the model client
+        model_client = OpenAIChatCompletionClient(
+            model="gpt-4o"
         )
-        
-        # Read the file
-        response = await file_surfer.on_messages(
-            messages=[{"role": "user", "content": f"Read the contents of {filepath}"}],
+
+        # Create the agent that can handle multimodal input
+        agent = AssistantAgent(
+            name="plot_analyzer",
+            model_client=model_client,
+            system_message="""You are an agent that can analyze and describe plots.
+            When given a plot, you should:
+            1. Describe what type of plot it is
+            2. Explain what the plot shows
+            3. Identify key features of the distribution
+            4. Note any interesting patterns or outliers
+            5. Provide a clear summary of the insights
+            
+            Your analysis should be thorough but concise, focusing on the most important aspects of the visualization.
+            
+            If given specific questions about the plot, answer them directly and clearly.""",
+            model_client_stream=True
+        )
+
+        # Load the plot as a PIL Image
+        plot_image = PILImage.open(filepath)
+
+        # Use default prompt if none provided
+        if prompt is None:
+            prompt = """Please analyze this plot and describe what it shows. Focus on:
+            1. The type of plot and its purpose
+            2. The distribution characteristics and patterns
+            3. Any notable outliers or anomalies
+            4. The approximate range of values
+            5. Any insights that could be relevant for data analysis"""
+
+        # Create a multimodal message with both text and the plot image
+        message = MultiModalMessage(
+            content=[
+                prompt,
+                Image(plot_image)
+            ],
+            source="user"
+        )
+
+        # Get the response
+        response = await agent.on_messages(
+            messages=[message],
             cancellation_token=None
         )
-        breakpoint()
-        
-        # Return the file contents
+
+        # Close the model client
+        await model_client.close()
+
+        # Return the analysis
         return response.chat_message.content
         
     except Exception as e:
-        return f"Error reading plot file: {str(e)}"
+        return f"Error analyzing plot file: {str(e)}"
 
 # Create the tool instance
-read_plot_tool = FunctionTool(
-    read_plot_file,
-    description="Read the contents of a plot file and return its contents as text",
-    name="read_plot"
+analyze_plot_tool = FunctionTool(
+    analyze_plot_file,
+    description="""Analyze a plot file and return a description of its contents.
+    You can provide a custom prompt to ask specific questions about the plot.
+    If no prompt is provided, a default analysis will be performed.""",
+    name="analyze_plot"
 )

@@ -8,7 +8,7 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from altum_v1.tools import query_perplexity, format_webpage
+from altum_v1.tools import query_perplexity, format_webpage, analyze_plot_file
 
 
 def load_agent_configs(config_path=None):
@@ -36,8 +36,13 @@ def create_tool_instances():
             description="Parse webpage content and extract readable text"
         ),
         # Add other tools here - these should be implemented properly
-        "code_runner": None,  # Add implementation or placeholder
-        "local_file_system": None  # Add implementation or placeholder
+        "analyze_plot": FunctionTool(
+            analyze_plot_file,
+            description="""Analyze a plot file and return a description of its contents.
+            You can provide a custom prompt to ask specific questions about the plot.
+            If no prompt is provided, a default analysis will be performed.""",
+            name="analyze_plot"
+        )
     }
     return tools
 
