@@ -1,5 +1,6 @@
 import asyncio
 import yaml
+import argparse
 
 from dotenv import load_dotenv
 import os
@@ -13,9 +14,27 @@ import json
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from altum_v1.utils import load_agent_configs, create_tool_instances, initialize_agents, save_messages, load_previous_summaries, format_task_prompt
+from altum_v1.utils import (
+    load_agent_configs, 
+    create_tool_instances, 
+    initialize_agents, 
+    format_structured_task_prompt,
+    save_messages_structured,
+    get_workflow_state,
+    update_workflow_state,
+    save_workflow_checkpoint,
+    mark_stage_completed,
+    clear_workflow_state,
+    prompt_for_workflow_action
+)
 
 load_dotenv()
+
+# Constants for workflow stages
+UNDERSTANDING_STAGE = 1
+EDA_STAGE = 2
+EXPERIMENTAL_DESIGN_STAGE = 3
+MODEL_TRAINING_STAGE = 4
 
 OVERALL_TASK_TEXT="""Your goal is to build an epigenetic clock capable of achieving near-SOTA performance in the task
 of predicting chronological age from DNA methylation data. You have been provided with two files containing 
@@ -34,8 +53,16 @@ a feasible goal.
 
 async def run_understanding_task():
     """Run the task to understand the problem."""
-    # Load previous summaries
-    previous_summaries = await load_previous_summaries(1)
+    # Initialize workflow state for understanding stage
+    stage = UNDERSTANDING_STAGE
+    subtask = 1  # Only one subtask in understanding stage
+    iteration = 1  # Only runs once
+    
+    # Save checkpoint at the start
+    save_workflow_checkpoint(stage, subtask, iteration, "Understanding Start")
+    
+    # Update workflow state
+    update_workflow_state(stage, subtask, iteration)
     
     agent_configs = load_agent_configs()
     available_tools = create_tool_instances()
@@ -72,22 +99,70 @@ async def run_understanding_task():
     and identify next steps when sufficient understanding has been reached.
     """
     
-    # Format the task with previous context
-    formatted_task = await format_task_prompt(initial_task, previous_summaries)
+    # Format the task with structured format
+    formatted_task = await format_structured_task_prompt(stage, subtask, initial_task, iteration)
     
     # Run the agent group on the task
     result = await Console(task_group.run_stream(task=formatted_task))
     
-    # Save messages and summary with task description
-    await save_messages(1, result.messages, result.messages[-1].dump()["content"], initial_task)
+    # Save messages and summary with task description using structured approach
+    await save_messages_structured(stage, subtask, iteration, result.messages, result.messages[-1].dump()["content"], initial_task)
+    
+    # Save checkpoint after completion
+    save_workflow_checkpoint(stage, subtask, iteration, "Understanding Complete")
+    
+    # Update workflow state to mark understanding stage as completed
+    mark_stage_completed(UNDERSTANDING_STAGE)
+    
+    # Create checkpoint for the start of the next stage
+    save_workflow_checkpoint(EDA_STAGE, label="Ready for EDA")
     
     return result
 
-async def main():
-
+async def main(args=None):
+    """Run the understanding phase workflow with checkpoint/resume capability."""
+    
+    if not args:
+        # If running from command line, get workflow options
+        action = await prompt_for_workflow_action(UNDERSTANDING_STAGE)
+        
+        # Handle different workflow actions
+        if action["action"] == "restart":
+            print(f"Restarting from stage {action['stage']}...")
+            # Clear state for this stage and future stages
+            await clear_workflow_state(action["stage"])
+        elif action["action"] == "resume":
+            print(f"Resuming from checkpoint {action['checkpoint_id']}...")
+            # Restore state from checkpoint
+            await resume_from_checkpoint(action["checkpoint_id"])
+            # Resume operation would require more specific handling
+            # For now, we just restart the task since it's a single subtask
+        else:  # New workflow
+            print("Starting new understanding workflow...")
+            # Clear any existing state
+            await clear_workflow_state(UNDERSTANDING_STAGE)
+    else:
+        # If called programmatically with args
+        if args.get("clear_state", False):
+            await clear_workflow_state(UNDERSTANDING_STAGE)
+    
+    # Run the understanding task
     await run_understanding_task()
+    
+    print("Understanding phase completed. Ready to proceed to EDA phase.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Add command-line arguments
+    parser = argparse.ArgumentParser(description="Run the Understanding workflow with checkpoint/resume options")
+    parser.add_argument("--restart", action="store_true", help="Restart from beginning")
+    parser.add_argument("--force", action="store_true", help="Force restart without prompting")
+    args_parsed = parser.parse_args()
+    
+    if args_parsed.restart:
+        # Restart from beginning
+        asyncio.run(main({"clear_state": True}))
+    else:
+        # Interactive mode
+        asyncio.run(main())
 
 

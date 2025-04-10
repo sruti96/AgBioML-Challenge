@@ -2,6 +2,7 @@ import os
 import yaml
 import sys
 import json
+import datetime
 
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
@@ -49,6 +50,13 @@ def create_tool_instances():
 def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gpt-4o"):
     """Initialize agents based on configurations."""
     model_client = OpenAIChatCompletionClient(model=model_name)
+
+    # Ensure all selected agents are in the agent_configs
+    selected_agent_names = [config["name"] for config in agent_configs]
+    if selected_agents:
+        for agent_name in selected_agents:
+            if agent_name not in selected_agent_names:
+                raise ValueError(f"Agent {agent_name} not found in agent_configs")
     
     agents = {}
     for config in agent_configs:
@@ -170,6 +178,9 @@ async def format_task_prompt(task_text: str, previous_summaries: str) -> str:
     """
     if previous_summaries:
         previous_summaries = previous_summaries.replace("TERMINATE", "")
+        previous_summaries = previous_summaries.replace("DONE", "")
+        previous_summaries = previous_summaries.replace("APPROVE", "")
+        previous_summaries = previous_summaries.replace("REVISE", "")
         return f"""
 THESE ARE THE SUMMARIES OF ALL PREVIOUS TASKS. THESE ARE NOT THE CURRENT TASK BUT PROVIDE INFORMATION THAT MAY BE RELEVANT:
 
@@ -185,3 +196,804 @@ THIS IS THE CURRENT TASK:
 
 {task_text}
 """
+
+# New memory management functions
+
+def get_workflow_state():
+    """Get the current workflow state (stage, subtasks completed).
+    
+    Returns:
+        dict: The current workflow state
+    """
+    memory_dir = 'memory'
+    state_file = os.path.join(memory_dir, 'workflow_state.json')
+    
+    try:
+        with open(state_file, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Default initial state
+        return {
+            "current_stage": 1,
+            "stages_completed": [],
+            "iterations": {}
+        }
+
+def update_workflow_state(stage, subtask=None, iteration=None):
+    """Update the workflow state.
+    
+    Args:
+        stage: The current stage number
+        subtask: Optional subtask number
+        iteration: Optional iteration number for the subtask
+    """
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    state_file = os.path.join(memory_dir, 'workflow_state.json')
+    
+    state = get_workflow_state()
+    
+    # Update the current stage
+    state["current_stage"] = stage
+    
+    # Update iterations if subtask is provided
+    if subtask is not None:
+        if "iterations" not in state:
+            state["iterations"] = {}
+        
+        stage_key = f"stage{stage}"
+        if stage_key not in state["iterations"]:
+            state["iterations"][stage_key] = {}
+        
+        subtask_key = f"subtask{subtask}"
+        if iteration is not None:
+            state["iterations"][stage_key][subtask_key] = iteration
+    
+    with open(state_file, 'w') as f:
+        json.dump(state, f)
+
+async def save_structured_summary(stage, subtask, iteration, summary, task_description):
+    """Save a summary in a structured format.
+    
+    Args:
+        stage: The stage number
+        subtask: The subtask number
+        iteration: The iteration number (for subtasks that can repeat)
+        summary: The summary text
+        task_description: The task description
+    """
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    summary_file = os.path.join(memory_dir, 'structured_summaries.json')
+    
+    try:
+        with open(summary_file, 'r') as f:
+            summaries = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        summaries = {}
+    
+    stage_key = f"stage{stage}"
+    if stage_key not in summaries:
+        summaries[stage_key] = {}
+    
+    subtask_key = f"subtask{subtask}"
+    if subtask_key not in summaries[stage_key]:
+        summaries[stage_key][subtask_key] = {}
+    
+    # Record the timestamp for sorting later
+    timestamp = datetime.datetime.now().isoformat()
+    
+    # Format the summary with task description
+    full_summary = {
+        "timestamp": timestamp,
+        "iteration": iteration,
+        "task_description": task_description,
+        "summary": summary
+    }
+    
+    iter_key = f"iteration{iteration}"
+    summaries[stage_key][subtask_key][iter_key] = full_summary
+    
+    with open(summary_file, 'w') as f:
+        json.dump(summaries, f)
+    
+    # Update the workflow state
+    update_workflow_state(stage, subtask, iteration)
+
+async def get_structured_summaries(current_stage, current_subtask=None, current_iteration=1):
+    """Get structured summaries relevant to the current workflow position.
+    
+    Args:
+        current_stage: The current stage number
+        current_subtask: Optional current subtask number
+        current_iteration: The current iteration number for the subtask (default: 1)
+    
+    Returns:
+        str: Formatted summaries relevant to the current context
+    """
+    memory_dir = 'memory'
+    summary_file = os.path.join(memory_dir, 'structured_summaries.json')
+    
+    try:
+        with open(summary_file, 'r') as f:
+            all_summaries = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "No previous summaries available."
+    
+    result_parts = []
+    
+    # Add headers and separation between stages for clarity
+    result_parts.append("=" * 80)
+    result_parts.append("SUMMARIES FROM PREVIOUS WORKFLOW STAGES")
+    result_parts.append("=" * 80)
+    
+    # Include summaries from all previous stages
+    for stage in range(1, current_stage):
+        stage_key = f"stage{stage}"
+        if stage_key in all_summaries:
+            stage_summaries = []
+            
+            result_parts.append(f"\n{'*' * 60}")
+            result_parts.append(f"STAGE {stage} SUMMARIES:")
+            result_parts.append(f"{'*' * 60}\n")
+            
+            for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
+                # For completed stages, include the final iteration of each subtask
+                final_iteration = max(int(k.replace("iteration", "")) for k in subtask_data.keys())
+                final_iter_key = f"iteration{final_iteration}"
+                
+                summary_data = subtask_data[final_iter_key]
+                
+                formatted_summary = f"""
+SUBTASK: {subtask_key}
+FINAL ITERATION: {final_iteration}
+
+TASK DESCRIPTION:
+{summary_data['task_description']}
+
+COMPLETED TASK RESULT:
+{summary_data['summary']}
+"""
+                stage_summaries.append(formatted_summary)
+            
+            result_parts.extend(stage_summaries)
+    
+    # For the current stage, include all completed subtasks
+    if current_stage > 0:
+        stage_key = f"stage{current_stage}"
+        if stage_key in all_summaries:
+            result_parts.append(f"\n{'=' * 80}")
+            result_parts.append(f"CURRENT STAGE {current_stage} SUMMARIES:")
+            result_parts.append(f"{'=' * 80}\n")
+            
+            # First, add all completed subtasks (with subtask number < current_subtask)
+            for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
+                subtask_num = int(subtask_key.replace("subtask", ""))
+                
+                # Include subtasks with lower numbers
+                if current_subtask is not None and subtask_num < current_subtask:
+                    # Get the latest iteration for this subtask
+                    final_iteration = max(int(k.replace("iteration", "")) for k in subtask_data.keys())
+                    final_iter_key = f"iteration{final_iteration}"
+                    
+                    summary_data = subtask_data[final_iter_key]
+                    
+                    formatted_summary = f"""
+SUBTASK: {subtask_key}
+LATEST ITERATION: {final_iteration}
+
+TASK DESCRIPTION:
+{summary_data['task_description']}
+
+COMPLETED TASK RESULT:
+{summary_data['summary']}
+"""
+                    result_parts.append(formatted_summary)
+            
+            # For iterations beyond the first (current_iteration > 1), include previous iteration's later subtasks
+            if current_iteration > 1:
+                result_parts.append(f"\n{'=' * 80}")
+                result_parts.append(f"PREVIOUS ITERATION SUMMARIES:")
+                result_parts.append(f"{'=' * 80}\n")
+                
+                # Add all subtasks from the previous iteration
+                for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
+                    subtask_num = int(subtask_key.replace("subtask", ""))
+                    
+                    # Include later subtasks from previous iteration (subtask_num > current_subtask)
+                    if current_subtask is not None and subtask_num > current_subtask:
+                        prev_iteration = current_iteration - 1
+                        iter_key = f"iteration{prev_iteration}"
+                        
+                        # Only include if this iteration exists
+                        if iter_key in subtask_data:
+                            summary_data = subtask_data[iter_key]
+                            
+                            formatted_summary = f"""
+SUBTASK: {subtask_key}
+ITERATION: {prev_iteration}
+
+TASK DESCRIPTION:
+{summary_data['task_description']}
+
+COMPLETED TASK RESULT:
+{summary_data['summary']}
+"""
+                            result_parts.append(formatted_summary)
+                
+                # Also include previous iterations of the current subtask if they exist
+                subtask_key = f"subtask{current_subtask}"
+                if subtask_key in all_summaries[stage_key]:
+                    subtask_data = all_summaries[stage_key][subtask_key]
+                    for i in range(1, current_iteration):
+                        iter_key = f"iteration{i}"
+                        if iter_key in subtask_data:
+                            summary_data = subtask_data[iter_key]
+                            
+                            formatted_summary = f"""
+SUBTASK: {subtask_key}
+ITERATION: {i}
+
+TASK DESCRIPTION:
+{summary_data['task_description']}
+
+COMPLETED TASK RESULT:
+{summary_data['summary']}
+"""
+                            result_parts.append(formatted_summary)
+    
+    return "\n".join(result_parts)
+
+# Enhanced versions of existing functions that use the new structured approach
+
+async def save_messages_structured(stage, subtask, iteration, messages, summary, task_description):
+    """Save messages and summary using the structured approach.
+    
+    Args:
+        stage: The stage number
+        subtask: The subtask number
+        iteration: The iteration number for this subtask
+        messages: List of messages to save
+        summary: The summary to save
+        task_description: The task description
+    """
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    
+    # Save messages
+    messages_file = os.path.join(memory_dir, 'structured_messages.json')
+    try:
+        with open(messages_file, 'r') as f:
+            all_messages = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_messages = {}
+    
+    stage_key = f"stage{stage}"
+    if stage_key not in all_messages:
+        all_messages[stage_key] = {}
+    
+    subtask_key = f"subtask{subtask}"
+    if subtask_key not in all_messages[stage_key]:
+        all_messages[stage_key][subtask_key] = {}
+    
+    iter_key = f"iteration{iteration}"
+    all_messages[stage_key][subtask_key][iter_key] = [msg.dump() for msg in messages]
+    
+    with open(messages_file, 'w') as f:
+        json.dump(all_messages, f)
+    
+    # Save the summary
+    await save_structured_summary(stage, subtask, iteration, summary, task_description)
+
+async def format_structured_task_prompt(stage, subtask, task_text, iteration=1):
+    """Format a task prompt with relevant previous summaries.
+    
+    Args:
+        stage: The current stage number
+        subtask: The current subtask number
+        task_text: The current task description
+        iteration: The current iteration number (default: 1)
+    
+    Returns:
+        str: Formatted prompt with relevant previous context
+    """
+    previous_summaries = await get_structured_summaries(stage, subtask, iteration)
+    
+    if previous_summaries and previous_summaries != "No previous summaries available.":
+        # Clean up any termination words
+        previous_summaries = previous_summaries.replace("TERMINATE", "")
+        previous_summaries = previous_summaries.replace("DONE", "")
+        previous_summaries = previous_summaries.replace("APPROVE", "")
+        previous_summaries = previous_summaries.replace("REVISE", "")
+        
+        return f"""
+THESE ARE THE SUMMARIES OF PREVIOUS TASKS AND ITERATIONS. THESE PROVIDE CONTEXT FOR YOUR CURRENT TASK:
+
+{previous_summaries}
+
+THIS IS YOUR CURRENT TASK:
+
+{task_text}
+"""
+    else:
+        return f"""
+THIS IS YOUR CURRENT TASK:
+
+{task_text}
+"""
+
+# Workflow Checkpoint and Resume Functionality
+
+def get_workflow_checkpoints():
+    """Get available workflow checkpoints.
+    
+    Returns:
+        dict: Available checkpoints with stage/subtask/iteration info
+    """
+    memory_dir = 'memory'
+    checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
+    
+    try:
+        with open(checkpoint_file, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            "stages_completed": [],
+            "checkpoints": {}
+        }
+
+def save_workflow_checkpoint(stage, subtask=None, iteration=None, label=None):
+    """Save a workflow checkpoint.
+    
+    Args:
+        stage: Stage number
+        subtask: Optional subtask number
+        iteration: Optional iteration number
+        label: Optional human-readable label for the checkpoint
+    """
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
+    
+    # Generate timestamp
+    timestamp = datetime.datetime.now().isoformat()
+    
+    # Generate checkpoint ID
+    checkpoint_id = f"checkpoint_{stage}"
+    if subtask is not None:
+        checkpoint_id += f"_{subtask}"
+        if iteration is not None:
+            checkpoint_id += f"_{iteration}"
+    checkpoint_id += f"_{timestamp.replace(':', '-').replace('.', '-')}"
+    
+    # Generate a human-readable description if not provided
+    if label is None:
+        label = f"Stage {stage}"
+        if subtask is not None:
+            label += f", Subtask {subtask}"
+            if iteration is not None:
+                label += f", Iteration {iteration}"
+    
+    # Get current checkpoints
+    checkpoints = get_workflow_checkpoints()
+    
+    # Add new checkpoint
+    checkpoints["checkpoints"][checkpoint_id] = {
+        "timestamp": timestamp,
+        "stage": stage,
+        "subtask": subtask,
+        "iteration": iteration,
+        "label": label,
+        "state": get_workflow_state()  # Save the current workflow state
+    }
+    
+    # Update stages completed if this is a stage completion
+    if subtask is None and stage not in checkpoints["stages_completed"]:
+        checkpoints["stages_completed"].append(stage)
+    
+    # Save updated checkpoints
+    with open(checkpoint_file, 'w') as f:
+        json.dump(checkpoints, f, indent=2)
+    
+    return checkpoint_id
+
+def mark_stage_completed(stage):
+    """Mark a workflow stage as completed.
+    
+    Args:
+        stage: Stage number to mark as completed
+    """
+    checkpoints = get_workflow_checkpoints()
+    
+    if stage not in checkpoints["stages_completed"]:
+        checkpoints["stages_completed"].append(stage)
+        
+        memory_dir = 'memory'
+        os.makedirs(memory_dir, exist_ok=True)
+        checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
+        
+        with open(checkpoint_file, 'w') as f:
+            json.dump(checkpoints, f, indent=2)
+
+def is_stage_completed(stage):
+    """Check if a workflow stage is completed.
+    
+    Args:
+        stage: Stage number to check
+        
+    Returns:
+        bool: True if the stage is completed, False otherwise
+    """
+    checkpoints = get_workflow_checkpoints()
+    return stage in checkpoints["stages_completed"]
+
+def get_latest_checkpoint(stage=None, subtask=None):
+    """Get the latest checkpoint for a stage/subtask.
+    
+    Args:
+        stage: Optional stage number to filter by
+        subtask: Optional subtask number to filter by
+        
+    Returns:
+        dict or None: Latest checkpoint or None if not found
+    """
+    checkpoints = get_workflow_checkpoints()
+    
+    # Filter checkpoints by stage/subtask
+    filtered = []
+    for cp_id, cp_data in checkpoints["checkpoints"].items():
+        if stage is not None and cp_data["stage"] != stage:
+            continue
+        if subtask is not None and cp_data["subtask"] != subtask:
+            continue
+        filtered.append((cp_id, cp_data))
+    
+    if not filtered:
+        return None
+    
+    # Sort by timestamp and return the latest
+    filtered.sort(key=lambda x: x[1]["timestamp"], reverse=True)
+    return {filtered[0][0]: filtered[0][1]}
+
+def get_maximum_iteration(stage, subtask):
+    """Get the maximum iteration number for a stage/subtask.
+    
+    Args:
+        stage: Stage number
+        subtask: Subtask number
+        
+    Returns:
+        int: Maximum iteration number, or 0 if no iterations found
+    """
+    memory_dir = 'memory'
+    summary_file = os.path.join(memory_dir, 'structured_summaries.json')
+    
+    try:
+        with open(summary_file, 'r') as f:
+            all_summaries = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 0
+    
+    stage_key = f"stage{stage}"
+    if stage_key not in all_summaries:
+        return 0
+    
+    subtask_key = f"subtask{subtask}"
+    if subtask_key not in all_summaries[stage_key]:
+        return 0
+    
+    # Extract iteration numbers from keys
+    iterations = [int(k.replace("iteration", "")) for k in all_summaries[stage_key][subtask_key].keys()]
+    
+    if not iterations:
+        return 0
+    
+    return max(iterations)
+
+async def clear_workflow_state(stage=None):
+    """Clear the workflow state to restart from a specific stage.
+    
+    Args:
+        stage: Optional stage number to restart from. If None, clears the entire state.
+    """
+    if stage is None:
+        # Clear the entire workflow state
+        state = {
+            "current_stage": 1,
+            "stages_completed": [],
+            "iterations": {}
+        }
+    else:
+        # Preserve previous stages' state but reset current and future stages
+        state = get_workflow_state()
+        
+        # Keep only stages earlier than the specified stage
+        for s in list(state.get("iterations", {}).keys()):
+            s_num = int(s.replace("stage", ""))
+            if s_num >= stage:
+                if "iterations" in state:
+                    state["iterations"].pop(s, None)
+        
+        state["current_stage"] = stage
+    
+    # Save the updated state
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    with open(os.path.join(memory_dir, 'workflow_state.json'), 'w') as f:
+        json.dump(state, f)
+
+async def list_available_workflow_options():
+    """List available workflow options for restart/resume.
+    
+    Returns:
+        dict: Available options with descriptions
+    """
+    checkpoints = get_workflow_checkpoints()
+    state = get_workflow_state()
+    
+    options = {
+        "restart": {},
+        "resume": None
+    }
+    
+    # Check for completed stages to restart from
+    for stage in sorted(checkpoints["stages_completed"]):
+        options["restart"][stage] = f"Restart from Stage {stage}"
+    
+    # Check for current state to resume
+    current_stage = state.get("current_stage")
+    if current_stage:
+        # Find the latest checkpoint for the current stage
+        latest = get_latest_checkpoint(stage=current_stage)
+        if latest:
+            cp_id, cp_data = list(latest.items())[0]
+            subtask = cp_data.get("subtask")
+            iteration = cp_data.get("iteration")
+            
+            resume_point = f"Stage {current_stage}"
+            if subtask is not None:
+                resume_point += f", Subtask {subtask}"
+                if iteration is not None:
+                    resume_point += f", Iteration {iteration}"
+            
+            options["resume"] = {
+                "checkpoint_id": cp_id,
+                "description": f"Resume from {resume_point}"
+            }
+    
+    return options
+
+async def prompt_for_workflow_action(current_stage):
+    """Prompt the user for workflow action (restart, resume, start new).
+    
+    Args:
+        current_stage: The current stage number for which we're prompting options
+    
+    Returns:
+        dict: Action to take with details
+    """
+    checkpoints = get_workflow_checkpoints()
+    state = get_workflow_state()
+    
+    options = {
+        "restart": False,
+        "resume": None
+    }
+    
+    # Check if we have a resumable state for this specific stage
+    has_resume_option = False
+    current_stage_key = f"stage{current_stage}"
+    if "iterations" in state and current_stage_key in state["iterations"]:
+        # Find the latest checkpoint for this stage
+        latest = get_latest_checkpoint(stage=current_stage)
+        if latest:
+            cp_id, cp_data = list(latest.items())[0]
+            subtask = cp_data.get("subtask")
+            iteration = cp_data.get("iteration")
+            
+            resume_point = f"Stage {current_stage}"
+            if subtask is not None:
+                resume_point += f", Subtask {subtask}"
+                if iteration is not None:
+                    resume_point += f", Iteration {iteration}"
+            
+            options["resume"] = {
+                "checkpoint_id": cp_id,
+                "description": f"Resume from {resume_point}"
+            }
+            has_resume_option = True
+    
+    # Check if prerequisite stages are completed
+    prereq_ready = True
+    if current_stage > 1:
+        prereq_ready = is_stage_completed(current_stage - 1)
+    
+    print(f"\n===== Workflow Management for Stage {current_stage} =====")
+    
+    # Track available options for input prompt
+    available_options = []
+    
+    # Display resume option if available
+    if has_resume_option:
+        print(f"R: {options['resume']['description']}")
+        available_options.append("R")
+    
+    # Always offer restart option
+    if current_stage == 1:
+        print(f"S: Start Stage 1 (Understanding Phase)")
+    else:
+        print(f"S: Start Stage {current_stage} from the beginning" + 
+              (f" (preserves Stage {current_stage-1} results)" if prereq_ready else ""))
+    available_options.append("S")
+    
+    # Offer clean start option if we're beyond stage 1 or have existing data
+    if current_stage > 1 or has_resume_option:
+        print("C: Clean start (erase all previous work)")
+        available_options.append("C")
+    
+    print("===========================")
+    
+    # Build the prompt string based on available options
+    prompt_options = "/".join(available_options)
+    choice = input(f"Enter your choice ({prompt_options}): ").strip().upper()
+    
+    if choice == "R" and has_resume_option:
+        return {
+            "action": "resume",
+            "checkpoint_id": options["resume"]["checkpoint_id"]
+        }
+    elif choice == "S":
+        if not prereq_ready and current_stage > 1:
+            confirm = input(f"Stage {current_stage-1} is not completed. Proceed anyway? (y/n): ").lower()
+            if confirm != 'y':
+                return await prompt_for_workflow_action(current_stage)  # Ask again
+        return {
+            "action": "restart",
+            "stage": current_stage
+        }
+    elif choice == "C" and (current_stage > 1 or has_resume_option):
+        confirm = input("This will erase ALL previous work. Are you sure? (y/n): ").lower()
+        if confirm != 'y':
+            return await prompt_for_workflow_action(current_stage)  # Ask again
+        return {
+            "action": "new"
+        }
+    else:
+        print(f"Invalid choice. Please enter one of: {prompt_options}")
+        return await prompt_for_workflow_action(current_stage)  # Ask again
+
+async def resume_from_checkpoint(checkpoint_id):
+    """Resume workflow from a specific checkpoint.
+    
+    Args:
+        checkpoint_id: Checkpoint ID to resume from
+    
+    Returns:
+        dict: Restored workflow state
+    """
+    checkpoints = get_workflow_checkpoints()
+    
+    if checkpoint_id not in checkpoints["checkpoints"]:
+        print(f"Checkpoint {checkpoint_id} not found.")
+        return None
+    
+    # Get the checkpoint data
+    checkpoint = checkpoints["checkpoints"][checkpoint_id]
+    
+    # Restore the workflow state
+    memory_dir = 'memory'
+    os.makedirs(memory_dir, exist_ok=True)
+    with open(os.path.join(memory_dir, 'workflow_state.json'), 'w') as f:
+        json.dump(checkpoint["state"], f)
+    
+    return checkpoint["state"]
+
+# Work directory management
+
+def get_task_workdir(stage, clean=False, workdir_suffix=None):
+    """Get the task-specific working directory for engineer outputs.
+    
+    Args:
+        stage: The stage number
+        clean: Whether to clean the directory if it exists
+        workdir_suffix: Optional suffix to add to the workdir name
+        
+    Returns:
+        str: Path to the task-specific working directory
+    """
+    # Create base name like 'task_2_workdir' or 'task_2_custom_suffix'
+    if workdir_suffix:
+        workdir_name = f"task_{stage}_{workdir_suffix}"
+    else:
+        workdir_name = f"task_{stage}_workdir"
+    
+    # Ensure the task workdir exists
+    os.makedirs(workdir_name, exist_ok=True)
+    
+    # Clean the directory if requested
+    if clean:
+        clean_directory(workdir_name)
+        
+    return workdir_name
+
+def clean_directory(directory):
+    """Remove all files in a directory but keep the directory itself.
+    
+    Args:
+        directory: Directory path to clean
+    """
+    for item in os.listdir(directory):
+        item_path = os.path.join(directory, item)
+        try:
+            if os.path.isfile(item_path):
+                os.unlink(item_path)
+            elif os.path.isdir(item_path):
+                import shutil
+                shutil.rmtree(item_path)
+        except Exception as e:
+            print(f"Error cleaning {item_path}: {e}")
+    
+    print(f"Cleaned directory: {directory}")
+
+def setup_task_environment(stage, subtask=None, is_restart=False, workdir_suffix=None):
+    """Set up task environment including working directory.
+    
+    Args:
+        stage: The stage number
+        subtask: Optional subtask number 
+        is_restart: Whether this is a restart (clean directory) or resume (preserve)
+        workdir_suffix: Optional suffix for the workdir name
+        
+    Returns:
+        dict: Environment details including workdir path
+    """
+    # Create and possibly clean the task workdir
+    output_dir = get_task_workdir(stage, clean=is_restart, workdir_suffix=workdir_suffix)
+    
+    # Create an info file in the output directory to track details
+    info = {
+        "stage": stage,
+        "subtask": subtask,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "is_restart": is_restart,
+        "output_directory": output_dir
+    }
+    
+    with open(os.path.join(output_dir, "task_info.json"), "w") as f:
+        json.dump(info, f, indent=2)
+    
+    # Handle data files - check for common data files in current directory
+    common_data_files = ['betas.arrow', 'metadata.arrow']
+    current_dir = os.getcwd()
+    
+    # Track the found files and their locations
+    data_files_info = {}
+    
+    # Check current directory for data files
+    for filename in common_data_files:
+        if os.path.exists(os.path.join(current_dir, filename)):
+            data_files_info[filename] = {
+                "location": "current_dir",
+                "path": os.path.join(current_dir, filename),
+                "relative_path": filename
+            }
+        else:
+            data_files_info[filename] = {
+                "location": "not_found",
+                "status": "File not found in accessible directories"
+            }
+    
+    # Add data files info to the environment details
+    info["data_files"] = data_files_info
+    info["docker_working_directory"] = current_dir
+    
+    # Update the info file with data files information
+    with open(os.path.join(output_dir, "task_info.json"), "w") as f:
+        json.dump(info, f, indent=2)
+    
+    return {
+        "workdir": current_dir,            # The Docker container working directory
+        "output_dir": output_dir,          # Where to save outputs
+        "info": info,
+        "data_files": data_files_info
+    }
