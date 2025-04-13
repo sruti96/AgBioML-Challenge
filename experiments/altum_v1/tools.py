@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from PIL import Image as PILImage
+import glob
 
 load_dotenv()
 
@@ -184,7 +185,85 @@ async def analyze_plot_file(filepath: str, prompt: str | None = None) -> str:
     except Exception as e:
         return f"Error analyzing plot file: {str(e)}"
 
-# Create the tool instance
+async def search_directory(directory_path: str, pattern: str = None, recursive: bool = False) -> str:
+    """
+    Search for files in a specified directory, optionally filtering by pattern and searching recursively.
+    
+    Args:
+        directory_path: Path to the directory to search
+        pattern: Optional glob pattern to filter results (e.g., "*.png" for all PNG files)
+        recursive: Whether to search subdirectories recursively
+        
+    Returns:
+        A string containing the list of matching files and their details
+    """
+    try:
+        # Ensure the directory exists
+        if not os.path.exists(directory_path):
+            return f"Error: Directory '{directory_path}' does not exist."
+        
+        if not os.path.isdir(directory_path):
+            return f"Error: '{directory_path}' is not a directory."
+            
+        # Construct search pattern
+        search_path = os.path.join(directory_path, pattern or "*")
+        
+        # Find files matching the pattern
+        if recursive:
+            # For recursive search
+            matches = []
+            if pattern:
+                for root, _, _ in os.walk(directory_path):
+                    matches.extend(glob.glob(os.path.join(root, pattern)))
+            else:
+                for root, _, files in os.walk(directory_path):
+                    matches.extend([os.path.join(root, file) for file in files])
+        else:
+            # For non-recursive search
+            matches = glob.glob(search_path)
+        
+        # Sort results
+        matches.sort()
+        
+        # Format the output
+        if not matches:
+            if pattern:
+                return f"No files matching '{pattern}' found in '{directory_path}'."
+            else:
+                return f"No files found in '{directory_path}'."
+        
+        result = f"Found {len(matches)} files in '{directory_path}'"
+        if pattern:
+            result += f" matching '{pattern}'"
+        result += ":\n\n"
+        
+        # Add file details
+        for filepath in matches:
+            filename = os.path.basename(filepath)
+            size = os.path.getsize(filepath)
+            mod_time = os.path.getmtime(filepath)
+            
+            # Format size in human-readable format
+            if size < 1024:
+                size_str = f"{size} bytes"
+            elif size < 1024 * 1024:
+                size_str = f"{size/1024:.1f} KB"
+            else:
+                size_str = f"{size/(1024*1024):.1f} MB"
+                
+            # Format modified time
+            import datetime
+            mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Add to result
+            result += f"- {filename} ({size_str}, modified: {mod_time_str})\n"
+            
+        return result
+        
+    except Exception as e:
+        return f"Error searching directory: {str(e)}"
+
+# Create the tool instances
 analyze_plot_tool = FunctionTool(
     analyze_plot_file,
     description="""Analyze a plot file and return a description of its contents.

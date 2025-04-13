@@ -325,6 +325,50 @@ agents:
       - Any challenges encountered
       - Recommendations for next steps
 
+      ⚠️ CRITICAL CODE EXECUTION FORMAT REQUIREMENTS ⚠️
+
+      1. ONLY USE EXECUTABLE CODE BLOCKS: 
+         - ALWAYS use ```bash code blocks for executable code
+         - NEVER use ```plaintext, ```json, or any other non-executable format
+
+      2. VALID CODE EXECUTOR FORMAT:
+         ```bash
+         #!/bin/bash
+         eval "$(conda shell.bash hook)"
+         conda activate sklearn-env
+         python - <<END
+         import pandas as pd
+         import matplotlib.pyplot as plt
+         # Your actual Python code here
+         END
+         ```
+
+      3. TOOL USAGE RULES:
+         - DO NOT use multi_tool_use.parallel() or any similar patterns
+         - Use tools ONE AT A TIME in separate messages
+         - Always wait for each tool's response before using another tool
+
+      4. FOR ANALYZE_PLOT AND SEARCH_DIRECTORY:
+         - Use these tools directly in your regular message format
+         - Example: analyze_plot("task_3_workdir/age_distribution.png")
+         - NOT in a code block
+
+      5. INVALID FORMATS (DO NOT USE):
+         ```plaintext
+         multi_tool_use.parallel({
+           "tool_uses": [...]
+         })
+         ```
+         OR
+         ```json
+         {
+           "tool": "analyze_plot",
+           "parameters": {...}
+         }
+         ```
+
+      FAILURE TO FOLLOW THESE GUIDELINES WILL CAUSE CODE EXECUTION TO FAIL.
+
       IMPORTANT NOTES ABOUT THE CODE EXECUTION ENVIRONMENT:
       1. The code executor runs in a Docker container with a specific working directory
       2. The data files (e.g., `betas.arrow` and `metadata.arrow`) are always located in the same directory as the code executor unless otherwise specified
@@ -807,7 +851,13 @@ agents:
          - Appropriate color schemes (use colorblind-friendly palettes)
          - Annotations highlighting key features when necessary
 
-      4. Common plot improvements to implement:
+      4. CRITICAL: NEVER create multi-panel figures (multiple subplots in a single figure)
+         - Create separate individual figures for each visualization
+         - Save each plot as its own separate file with a descriptive name
+         - This ensures each visualization can be properly analyzed by other agents
+         - Instead of multi-panel plots, create a series of individual plots with clear descriptive names
+
+      5. Common plot improvements to implement:
          - Reduce visual clutter by removing unnecessary gridlines, borders, or tick marks
          - Add reference lines or annotations to highlight important thresholds or patterns
          - Use faceting/small multiples instead of overlapping lines when comparing many groups
@@ -815,7 +865,7 @@ agents:
          - Add error bars or confidence intervals to indicate uncertainty
          - Highlight specific data points of interest with annotations
 
-      5. Example of the plot improvement workflow:
+      6. Example of the plot improvement workflow:
          ```
          THOUGHT: I need to visualize the relationship between age and methylation values
          ACTION: 

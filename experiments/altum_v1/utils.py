@@ -4,6 +4,9 @@ import sys
 import json
 import datetime
 
+# Define memory directory as a module-level constant so it can be patched in tests
+memory_dir = 'memory'
+
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
@@ -92,7 +95,6 @@ async def load_previous_summaries() -> str:
     Returns:
         A formatted string containing all previous summaries and their task descriptions
     """
-    memory_dir = 'memory'
     summary_file = os.path.join(memory_dir, 'all_meeting_summaries.json')
     
     try:
@@ -120,7 +122,6 @@ async def save_messages(task_number: int, messages: list, summary: str, task_des
         task_description: The task description that generated this summary
         subtask_number: Optional subtask number. If None, saves as main task messages
     """
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     
     # Save all messages
@@ -205,7 +206,6 @@ def get_workflow_state():
     Returns:
         dict: The current workflow state
     """
-    memory_dir = 'memory'
     state_file = os.path.join(memory_dir, 'workflow_state.json')
     
     try:
@@ -227,7 +227,6 @@ def update_workflow_state(stage, subtask=None, iteration=None):
         subtask: Optional subtask number
         iteration: Optional iteration number for the subtask
     """
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     state_file = os.path.join(memory_dir, 'workflow_state.json')
     
@@ -262,7 +261,6 @@ async def save_structured_summary(stage, subtask, iteration, summary, task_descr
         summary: The summary text
         task_description: The task description
     """
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     summary_file = os.path.join(memory_dir, 'structured_summaries.json')
     
@@ -311,7 +309,6 @@ async def get_structured_summaries(current_stage, current_subtask=None, current_
     Returns:
         str: Formatted summaries relevant to the current context
     """
-    memory_dir = 'memory'
     summary_file = os.path.join(memory_dir, 'structured_summaries.json')
     
     try:
@@ -339,8 +336,18 @@ async def get_structured_summaries(current_stage, current_subtask=None, current_
             
             for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
                 # For completed stages, include the final iteration of each subtask
-                final_iteration = max(int(k.replace("iteration", "")) for k in subtask_data.keys())
+                if not subtask_data:  # Skip empty subtasks
+                    continue
+                    
+                iterations = [int(k.replace("iteration", "")) for k in subtask_data.keys()]
+                if not iterations:  # Skip if no iterations
+                    continue
+                    
+                final_iteration = max(iterations)  # GET THE MAXIMUM ITERATION
                 final_iter_key = f"iteration{final_iteration}"
+                
+                if final_iter_key not in subtask_data:  # Skip if iteration doesn't exist
+                    continue
                 
                 summary_data = subtask_data[final_iter_key]
                 
@@ -349,10 +356,10 @@ SUBTASK: {subtask_key}
 FINAL ITERATION: {final_iteration}
 
 TASK DESCRIPTION:
-{summary_data['task_description']}
+{summary_data.get('task_description', 'No task description available')}
 
 COMPLETED TASK RESULT:
-{summary_data['summary']}
+{summary_data.get('summary', 'No summary available')}
 """
                 stage_summaries.append(formatted_summary)
             
@@ -368,13 +375,23 @@ COMPLETED TASK RESULT:
             
             # First, add all completed subtasks (with subtask number < current_subtask)
             for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
+                if not subtask_data:  # Skip empty subtasks
+                    continue
+                    
                 subtask_num = int(subtask_key.replace("subtask", ""))
                 
                 # Include subtasks with lower numbers
                 if current_subtask is not None and subtask_num < current_subtask:
                     # Get the latest iteration for this subtask
-                    final_iteration = max(int(k.replace("iteration", "")) for k in subtask_data.keys())
+                    iterations = [int(k.replace("iteration", "")) for k in subtask_data.keys()]
+                    if not iterations:  # Skip if no iterations
+                        continue
+                        
+                    final_iteration = max(iterations)  # GET THE MAXIMUM ITERATION
                     final_iter_key = f"iteration{final_iteration}"
+                    
+                    if final_iter_key not in subtask_data:  # Skip if iteration doesn't exist
+                        continue
                     
                     summary_data = subtask_data[final_iter_key]
                     
@@ -383,10 +400,10 @@ SUBTASK: {subtask_key}
 LATEST ITERATION: {final_iteration}
 
 TASK DESCRIPTION:
-{summary_data['task_description']}
+{summary_data.get('task_description', 'No task description available')}
 
 COMPLETED TASK RESULT:
-{summary_data['summary']}
+{summary_data.get('summary', 'No summary available')}
 """
                     result_parts.append(formatted_summary)
             
@@ -398,6 +415,9 @@ COMPLETED TASK RESULT:
                 
                 # Add all subtasks from the previous iteration
                 for subtask_key, subtask_data in sorted(all_summaries[stage_key].items()):
+                    if not subtask_data:  # Skip empty subtasks
+                        continue
+                        
                     subtask_num = int(subtask_key.replace("subtask", ""))
                     
                     # Include later subtasks from previous iteration (subtask_num > current_subtask)
@@ -414,10 +434,10 @@ SUBTASK: {subtask_key}
 ITERATION: {prev_iteration}
 
 TASK DESCRIPTION:
-{summary_data['task_description']}
+{summary_data.get('task_description', 'No task description available')}
 
 COMPLETED TASK RESULT:
-{summary_data['summary']}
+{summary_data.get('summary', 'No summary available')}
 """
                             result_parts.append(formatted_summary)
                 
@@ -435,10 +455,10 @@ SUBTASK: {subtask_key}
 ITERATION: {i}
 
 TASK DESCRIPTION:
-{summary_data['task_description']}
+{summary_data.get('task_description', 'No task description available')}
 
 COMPLETED TASK RESULT:
-{summary_data['summary']}
+{summary_data.get('summary', 'No summary available')}
 """
                             result_parts.append(formatted_summary)
     
@@ -457,7 +477,6 @@ async def save_messages_structured(stage, subtask, iteration, messages, summary,
         summary: The summary to save
         task_description: The task description
     """
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     
     # Save messages
@@ -530,7 +549,6 @@ def get_workflow_checkpoints():
     Returns:
         dict: Available checkpoints with stage/subtask/iteration info
     """
-    memory_dir = 'memory'
     checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
     
     try:
@@ -551,7 +569,6 @@ def save_workflow_checkpoint(stage, subtask=None, iteration=None, label=None):
         iteration: Optional iteration number
         label: Optional human-readable label for the checkpoint
     """
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
     
@@ -608,11 +625,7 @@ def mark_stage_completed(stage):
     if stage not in checkpoints["stages_completed"]:
         checkpoints["stages_completed"].append(stage)
         
-        memory_dir = 'memory'
-        os.makedirs(memory_dir, exist_ok=True)
-        checkpoint_file = os.path.join(memory_dir, 'workflow_checkpoints.json')
-        
-        with open(checkpoint_file, 'w') as f:
+        with open(os.path.join(memory_dir, 'workflow_checkpoints.json'), 'w') as f:
             json.dump(checkpoints, f, indent=2)
 
 def is_stage_completed(stage):
@@ -665,7 +678,6 @@ def get_maximum_iteration(stage, subtask):
     Returns:
         int: Maximum iteration number, or 0 if no iterations found
     """
-    memory_dir = 'memory'
     summary_file = os.path.join(memory_dir, 'structured_summaries.json')
     
     try:
@@ -717,7 +729,6 @@ async def clear_workflow_state(stage=None):
         state["current_stage"] = stage
     
     # Save the updated state
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     with open(os.path.join(memory_dir, 'workflow_state.json'), 'w') as f:
         json.dump(state, f)
@@ -869,7 +880,7 @@ async def resume_from_checkpoint(checkpoint_id):
         checkpoint_id: Checkpoint ID to resume from
     
     Returns:
-        dict: Restored workflow state
+        dict: Restored workflow state or None if checkpoint not found
     """
     checkpoints = get_workflow_checkpoints()
     
@@ -881,10 +892,12 @@ async def resume_from_checkpoint(checkpoint_id):
     checkpoint = checkpoints["checkpoints"][checkpoint_id]
     
     # Restore the workflow state
-    memory_dir = 'memory'
     os.makedirs(memory_dir, exist_ok=True)
     with open(os.path.join(memory_dir, 'workflow_state.json'), 'w') as f:
-        json.dump(checkpoint["state"], f)
+        json.dump(checkpoint["state"], f, indent=2)
+    
+    print(f"Restored workflow state from checkpoint: {checkpoint['label']}")
+    print(f"Stage: {checkpoint['stage']}, Subtask: {checkpoint.get('subtask')}, Iteration: {checkpoint.get('iteration')}")
     
     return checkpoint["state"]
 

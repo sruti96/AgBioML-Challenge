@@ -42,7 +42,8 @@ from altum_v1.utils import (
     get_maximum_iteration,
     clear_workflow_state,
     prompt_for_workflow_action,
-    setup_task_environment
+    setup_task_environment,
+    resume_from_checkpoint
 )
 
 load_dotenv()
