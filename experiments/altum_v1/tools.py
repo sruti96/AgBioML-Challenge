@@ -263,11 +263,25 @@ async def search_directory(directory_path: str, pattern: str = None, recursive: 
     except Exception as e:
         return f"Error searching directory: {str(e)}"
 
-# Create the tool instances
-analyze_plot_tool = FunctionTool(
-    analyze_plot_file,
-    description="""Analyze a plot file and return a description of its contents.
-    You can provide a custom prompt to ask specific questions about the plot.
-    If no prompt is provided, a default analysis will be performed.""",
-    name="analyze_plot"
-)
+
+async def read_text_file(filepath: str) -> str:
+    """
+    Read the contents of a text file.
+    """
+    try:
+        with open(filepath, 'r') as file:
+            return file.read()
+    except Exception as e:
+        return f"Error reading text file: {str(e)}"
+
+
+async def read_arrow_file(filepath: str) -> str:
+    """
+    Read the contents of an Arrow file (feather format).
+    """
+    import pandas as pd
+    
+    try:
+        return pd.read_feather(filepath)
+    except Exception as e:
+        return f"Error reading Arrow file: {str(e)}"

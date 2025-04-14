@@ -13,10 +13,12 @@ import asyncio
 import os
 from typing import Sequence
 
-from autogen_core.agent import BaseChatAgent, CancellationToken
+from autogen_agentchat.agents import BaseChatAgent
+from autogen_core import CancellationToken
 from autogen_agentchat.messages import TextMessage, BaseChatMessage
-from autogen_core.messages import Response
+from autogen_agentchat.base import Response
 from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_agentchat.ui import Console
 from autogen_agentchat.agents import AssistantAgent, CodeExecutorAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_ext.code_executors.local import LocalCommandLineCodeExecutor
@@ -47,7 +49,9 @@ Your code should be well-structured with:
 If you need to install any packages, use pip or conda commands as needed.
 If the code executor reports any errors, fix them in your next response.
 
-When you think your implementation is complete, indicate with "ENGINEER_DONE".
+After you have written the code, the code executor will run it and return the output to you.
+
+Once you are satisfied with the output, indicate with "ENGINEER_DONE".
 """
 
 CRITIC_SYSTEM_PROMPT = """
@@ -97,13 +101,13 @@ class EngineerSociety(BaseChatAgent):
         """
         while True:
             # Run the first team with the given messages and returns the last message produced by the team.
-            result_engineer = await self._engineer_team.run(task=messages, cancellation_token=cancellation_token)
+            result_engineer = await Console(self._engineer_team.run_stream(task=messages, cancellation_token=cancellation_token))
             # To stream the inner messages, implement `on_messages_stream` and use that to implement `on_messages`.
             assert isinstance(result_engineer.messages[-1], TextMessage)
             messages = result_engineer.messages
 
             # Run the second team with the given messages and returns the last message produced by the team.
-            result_critic = await self._critic_team.run(task=messages, cancellation_token=cancellation_token)
+            result_critic = await Console(self._critic_team.run_stream(task=messages, cancellation_token=cancellation_token))
             # To stream the inner messages, implement `on_messages_stream` and use that to implement `on_messages`.
             assert isinstance(result_critic.messages[-1], TextMessage)
 

@@ -3,6 +3,8 @@ import yaml
 import sys
 import json
 import datetime
+import glob
+import shutil
 
 # Define memory directory as a module-level constant so it can be patched in tests
 memory_dir = 'memory'
@@ -12,8 +14,42 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from altum_v1.tools import query_perplexity, format_webpage, analyze_plot_file
+from altum_v1.tools import (
+    query_perplexity, 
+    format_webpage, 
+    analyze_plot_file, 
+    search_directory, 
+    read_text_file,
+    read_arrow_file
+)
 
+# Clean up temporary code files
+def cleanup_temp_files(directory="."):
+    """Remove temporary code files created during execution.
+    
+    Args:
+        directory: Directory to clean (defaults to current directory)
+    """
+    # Pattern for temporary code files
+    patterns = ["tmp_code_*", "*.pyc", "__pycache__"]
+    
+    total_removed = 0
+    for pattern in patterns:
+        for file_path in glob.glob(os.path.join(directory, pattern)):
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                    print(f"Removed: {file_path}")
+                    total_removed += 1
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    print(f"Removed directory: {file_path}")
+                    total_removed += 1
+            except Exception as e:
+                print(f"Error removing {file_path}: {e}")
+    
+    print(f"Cleanup complete. Removed {total_removed} temporary files/directories.")
+    return total_removed
 
 def load_agent_configs(config_path=None):
     """Load agent configurations from YAML file."""
@@ -29,23 +65,37 @@ def load_agent_configs(config_path=None):
 def create_tool_instances():
     """Create instances of all available tools."""
     tools = {
-        "perplexity": FunctionTool(
+        "perplexity_search": FunctionTool(
             query_perplexity, 
             strict=True, 
-            description="Query perplexity for information on a research topic"
+            description="Query Perplexity for an AI-powered search engine that is great for research and technical questions."
         ),
         "webpage_parser": FunctionTool(
             format_webpage, 
             strict=True, 
             description="Parse webpage content and extract readable text"
         ),
-        # Add other tools here - these should be implemented properly
         "analyze_plot": FunctionTool(
             analyze_plot_file,
             description="""Analyze a plot file and return a description of its contents.
             You can provide a custom prompt to ask specific questions about the plot.
             If no prompt is provided, a default analysis will be performed.""",
             name="analyze_plot"
+        ),
+        "search_directory": FunctionTool(
+            search_directory,
+            description="Search for files in a specified directory, optionally filtering by pattern and searching recursively.",
+            name="search_directory"
+        ),
+        "read_text_file": FunctionTool(
+            read_text_file,
+            description="Read the contents of a text file (.txt, .csv, .tsv, .json, etc.).",
+            name="read_text_file"
+        ),
+        "read_arrow_file": FunctionTool(
+            read_arrow_file,
+            description="Read the contents of an Arrow file (feather format) as a pandas DataFrame.",
+            name="read_arrow_file"
         )
     }
     return tools
@@ -1010,3 +1060,117 @@ def setup_task_environment(stage, subtask=None, is_restart=False, workdir_suffix
         "info": info,
         "data_files": data_files_info
     }
+
+# Task prompt loading utilities
+def load_task_prompts(config_path=None):
+    """Load task prompts from YAML file."""
+    if config_path is None:
+        # Use path relative to current file
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                                  "config/tasks.yaml")
+    
+    with open(config_path, "r") as f:
+        prompts = yaml.safe_load(f)
+    return prompts.get("tasks", {})
+
+def get_task_text(task_category, task_name, **kwargs):
+    """Get a task prompt text with optional format parameters.
+    
+    Args:
+        task_category: Category of the task (e.g., 'understanding', 'eda', 'data_split')
+        task_name: Name of the specific task (e.g., 'subtask_1', 'subtask_2_revision')
+        **kwargs: Format parameters to be applied to the task text
+        
+    Returns:
+        str: The formatted task text
+    """
+    prompts = load_task_prompts()
+    
+    # Handle missing categories or task names
+    if task_category not in prompts:
+        print(f"Warning: Task category '{task_category}' not found in prompts.yaml")
+        return ""
+    
+    if task_name not in prompts[task_category]:
+        print(f"Warning: Task name '{task_name}' not found in category '{task_category}'")
+        return ""
+    
+    # Get the task text and format it if kwargs are provided
+    task_text = prompts[task_category][task_name].get("text", "")
+    
+    # If 'overall_task_text' is not explicitly provided but needed, load it from prompts
+    if "overall_task_text" in task_text and "overall_task_text" not in kwargs:
+        if "overall" in prompts and "text" in prompts["overall"]:
+            kwargs["overall_task_text"] = prompts["overall"]["text"]
+    
+    if kwargs:
+        try:
+            task_text = task_text.format(**kwargs)
+        except KeyError as e:
+            print(f"Warning: Missing format parameter: {e}")
+    
+    return task_text
+
+def get_system_prompt(prompt_name):
+    """Get a system prompt by name from the agents.yaml file.
+    
+    Args:
+        prompt_name: Name of the agent (e.g., 'data_science_critic', 'summarizer')
+        
+    Returns:
+        str: The agent's system prompt text
+    """
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                              "config/agents.yaml")
+    
+    with open(config_path, "r") as f:
+        agents_config = yaml.safe_load(f)
+    
+    if "agents" not in agents_config:
+        print(f"Warning: No agents found in agents.yaml")
+        return ""
+    
+    # Find the agent with the matching name
+    for agent in agents_config["agents"]:
+        if agent["name"] == prompt_name:
+            return agent.get("system_prompt", "")
+    
+    print(f"Warning: Agent '{prompt_name}' not found in agents.yaml")
+    return ""
+
+def get_checklist(checklist_name):
+    """Get a checklist by name from the tasks.yaml file.
+    
+    Args:
+        checklist_name: Name of the checklist (e.g., 'plot_quality')
+        
+    Returns:
+        str: The checklist text
+    """
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                              "config/tasks.yaml")
+    
+    with open(config_path, "r") as f:
+        prompts = yaml.safe_load(f)
+    
+    if "checklists" not in prompts or checklist_name not in prompts["checklists"]:
+        print(f"Warning: Checklist '{checklist_name}' not found in tasks.yaml")
+        return ""
+    
+    return prompts["checklists"][checklist_name]
+
+def get_agent_token(agent_configs, agent_name, token_type="termination_token"):
+    """Get a token for an agent from the agent configs.
+    
+    Args:
+        agent_configs: List of agent configurations
+        agent_name: Name of the agent to find
+        token_type: Type of token to retrieve (default: "termination_token")
+        
+    Returns:
+        The token value, or None if the agent or token doesn't exist
+    """
+    for agent_config in agent_configs:
+        if agent_config["name"] == agent_name and token_type in agent_config:
+            return agent_config[token_type]
+    return None

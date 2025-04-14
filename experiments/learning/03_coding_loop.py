@@ -52,7 +52,7 @@ eval "$(conda shell.bash hook)"
 conda activate <environment-name>
 
 # Run the Python code
-python - <<END
+PYTHONFAULTHANDLER=1 python - <<END
 <your_python_code>
 END
 ```
