@@ -38,7 +38,8 @@ from altum_v1.utils import (
     get_task_text,
     get_checklist,
     cleanup_temp_files,
-    get_agent_token
+    get_agent_token,
+    save_structured_summary
 )
 from altum_v1.agents import EngineerSociety
 
@@ -90,7 +91,7 @@ async def run_subtask_1(task_env=None):
     # Format the task with previous context
     formatted_task = await format_structured_task_prompt(stage, subtask, task_text, iteration)
     
-    result = await Console(task_group.run_stream(task=formatted_task))
+    result = await Console(task_group.run_stream(task=formatted_task), output_stats=True)
     
     # Save messages and summary with task description using structured approach
     await save_messages_structured(stage, subtask, iteration, result.messages, result.messages[-1].dump()["content"], task_text)
@@ -203,10 +204,12 @@ async def run_subtask_2(iteration=1, task_env=None, retry_count=0):
         if result.chat_message:
             engineer_messages.append(result.chat_message)
         
+        # Get the content of the result for the summary
+        summary_content = result.chat_message.content if result.chat_message else "No result"
+        
         # Save messages and summary with task description
         await save_messages_structured(stage, subtask, iteration, engineer_messages, 
-                                     result.chat_message.content if result.chat_message else "No result", 
-                                     task_text)
+                                     summary_content, task_text)
         
         # Clean up temp files after successful completion
         cleanup_temp_files()
@@ -217,6 +220,9 @@ async def run_subtask_2(iteration=1, task_env=None, retry_count=0):
             with open(summary_file_path, "w") as f:
                 f.write(result.chat_message.content)
             print(f"Saved implementation summary to {summary_file_path}")
+            
+            # Also save the implementation summary to the structured summaries
+            await save_structured_summary(stage, subtask, iteration, result.chat_message.content, task_text)
         
         return result
         

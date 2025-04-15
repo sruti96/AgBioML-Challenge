@@ -126,7 +126,7 @@ Remember to check your results at each step and build up complexity gradually.
         engineer_messages_with_path.append(engineering_heuristics)
         
         # Run the engineer team with the given messages
-        result_engineer = await Console(self._engineer_team.run_stream(task=engineer_messages_with_path, cancellation_token=cancellation_token))
+        result_engineer = await Console(self._engineer_team.run_stream(task=engineer_messages_with_path, cancellation_token=cancellation_token), output_stats=True)
         
         engineer_messages = result_engineer.messages
         engineer_messages = [message for message in engineer_messages if isinstance(message, TextMessage)]
@@ -155,13 +155,16 @@ Remember to check your results at each step and build up complexity gradually.
             
             # Add explicit instruction for critic to use tools
             tool_instruction_message = TextMessage(
-                content=f"""IMPORTANT: Before providing your assessment, you MUST:
-1. Use the search_directory tool to find all output files: search_directory("{self._output_dir}", "*.png")
-2. Use the analyze_plot tool on each visualization found: analyze_plot("{self._output_dir}/filename.png")
-3. If no visualizations are found in the output directory, check what files exist: search_directory("{self._output_dir}", "*")
-4. Examine the code and statistical evidence provided
+                content=f"""TOOLS AVAILABLE FOR YOUR REVIEW:
 
-Files are saved in the "{self._output_dir}" directory. Your review will NOT be considered complete unless you have used these tools to examine the visualizations and evidence.""",
+The following tools can help you evaluate the implementation:
+- search_directory("{self._output_dir}", "*.png") to find visualization files
+- analyze_plot("{self._output_dir}/filename.png") to examine any visualizations of interest
+- search_directory("{self._output_dir}", "*") to see all output files
+
+You can use these tools as needed to support your assessment. Tools are particularly helpful for examining visualizations that seem relevant to your evaluation. In your first review, examining some visualizations is recommended but not mandatory.
+
+In follow-up reviews, you can focus primarily on whether the engineer addressed your previous feedback and only analyze plots that are new or relevant to the changes.""",
                 source="User"
             )
             messages_for_critic.append(tool_instruction_message)
@@ -169,37 +172,14 @@ Files are saved in the "{self._output_dir}" directory. Your review will NOT be c
             print(f"TOKEN ESTIMATE: critic team before run {revision_counter}: {estimate_tokens(messages_for_critic)}")
             print(f"NUM MESSAGES: {len(messages_for_critic)}")
             time.sleep(5)
-            result_critic = await Console(self._critic_team.run_stream(task=messages_for_critic, cancellation_token=cancellation_token))
+            result_critic = await Console(self._critic_team.run_stream(task=messages_for_critic, cancellation_token=cancellation_token), output_stats=True)
             critic_messages = result_critic.messages
             
             critic_messages = [message for message in critic_messages if isinstance(message, TextMessage)]
             print(f"TOKEN ESTIMATE: critic team after run {revision_counter}: {estimate_tokens(critic_messages)}")
             print(f"NUM MESSAGES: {len(critic_messages)}")
             time.sleep(5)
-            
-            # Check if the critic used any tools
-            used_tools = False
-            for msg in critic_messages:
-                if ("search_directory" in msg.content and f"{self._output_dir}" in msg.content) and ("analyze_plot" in msg.content):
-                    used_tools = True
-                    break
-            
-            # If critic didn't use tools and this isn't already a retry for tools
-            if not used_tools and not any("REMINDER: YOU MUST USE TOOLS" in msg.content for msg in messages_for_critic):
-                print("Critic did not use the required tools. Sending reminder and retrying...")
-                tool_reminder = TextMessage(
-                    content=f"""REMINDER: YOU MUST USE TOOLS TO PROPERLY EVALUATE THE WORK.
-1. First use search_directory("{self._output_dir}", "*.png") to find visualization files
-2. Then use analyze_plot() on each visualization in the {self._output_dir} directory
-3. Try search_directory("{self._output_dir}", "*") to see all files in the output directory
-4. Only after examining the evidence should you provide your assessment
 
-This is a requirement before approving or requesting revisions.""",
-                    source="User"
-                )
-                messages_for_critic.append(tool_reminder)
-                continue  # Skip to the next iteration of the loop to retry with the critic
-            
             # Store the last message
             last_message_critic = critic_messages[-1]
             
@@ -266,11 +246,34 @@ Examples of correct paths:
                 source="User"
             )
             
+            # Add feedback acknowledgment requirement
+            feedback_acknowledgment_reminder = TextMessage(
+                content="""CRITICAL REQUIREMENT: Once you receive feedback from the critic, you MUST explicitly acknowledge each point of feedback before implementing changes.
+
+Your response MUST begin with:
+
+"I acknowledge the following feedback points from the data science critic:
+1. [Restate first feedback point from the critic]
+2. [Restate second feedback point from the critic]
+3. [Restate third feedback point from the critic]
+...etc.
+
+My implementation plan to address each point:
+1. [Your plan to address the first point]
+2. [Your plan to address the second point]
+3. [Your plan to address the third point]
+...etc."
+
+DO NOT proceed with code implementation until you have explicitly acknowledged each feedback point from the critic.
+""",
+                source="User"
+            )
+            
             # Combine the messages with reminders
-            engineer_iteration_messages = original_messages + last_messages_engineer + [last_message_critic, directory_reminder, troubleshooting_reminder]
+            engineer_iteration_messages = original_messages + last_messages_engineer + [last_message_critic, directory_reminder, troubleshooting_reminder, feedback_acknowledgment_reminder]
             
             # Run the engineer team with updated messages
-            result_engineer = await Console(self._engineer_team.run_stream(task=engineer_iteration_messages, cancellation_token=cancellation_token))
+            result_engineer = await Console(self._engineer_team.run_stream(task=engineer_iteration_messages, cancellation_token=cancellation_token), output_stats=True)
             engineer_messages = result_engineer.messages
             
             engineer_messages = [message for message in engineer_messages if isinstance(message, TextMessage)]
@@ -278,14 +281,19 @@ Examples of correct paths:
             print(f"TOKEN ESTIMATE: engineer team after run {revision_counter}: {estimate_tokens(engineer_messages)}")
             print(f"NUM MESSAGES: {len(engineer_messages)}")
             time.sleep(5)
-            # in the last message, remove the engineer_terminate_token
-            engineer_messages[-1].content = engineer_messages[-1].content.replace(self._engineer_terminate_token, "")
-            if len(engineer_messages) > NUM_LAST_MESSAGES:
-                last_messages_engineer = engineer_messages[-NUM_LAST_MESSAGES:]
-            else:
-                last_messages_engineer = engineer_messages
-            self.messages_to_summarize.extend(last_messages_engineer)
             
+            # Remove strict checking for acknowledgment as we've made it a suggestion rather than a requirement
+            
+            # Process the engineer messages
+            if len(engineer_messages) > 0:
+                # in the last message, remove the engineer_terminate_token
+                engineer_messages[-1].content = engineer_messages[-1].content.replace(self._engineer_terminate_token, "")
+                if len(engineer_messages) > NUM_LAST_MESSAGES:
+                    last_messages_engineer = engineer_messages[-NUM_LAST_MESSAGES:]
+                else:
+                    last_messages_engineer = engineer_messages
+                self.messages_to_summarize.extend(last_messages_engineer)
+
         # Generate summary report if a summarizer agent is provided
         if self._summarizer_agent and self._original_task:
             summary_content = f"""

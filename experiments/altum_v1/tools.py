@@ -16,7 +16,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.messages import MultiModalMessage
 from autogen_core import Image
 from autogen_agentchat.agents import AssistantAgent
-
+from autogen_agentchat.ui import Console
 YOUR_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 async def query_perplexity(query: str) -> tuple[str, list[str]]:
@@ -48,6 +48,7 @@ async def query_perplexity(query: str) -> tuple[str, list[str]]:
         model=model,
         messages=messages,
     )
+    print(f"Perplexity usage: {response.usage}")
     
     # Format the response
     response_dict = response.model_dump()
@@ -142,10 +143,38 @@ async def analyze_plot_file(filepath: str, prompt: str | None = None) -> str:
             3. Identify key features of the distribution
             4. Note any interesting patterns or outliers
             5. Provide a clear summary of the insights
+            6. Critically evaluate how well- or poorly-formed the plot is (see below)
+
+            Rubric for evaluating plot quality:
+| **Criteria**                  | **Good**                                                            | **Fair**                                                              | **Poor**                                                              |
+|-------------------------------|---------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **Plot Type Appropriateness** | Plot type is well-suited to the data and clearly conveys its message. | Plot type is somewhat appropriate but may lead to minor confusion.    | Plot type is poorly chosen, causing significant misinterpretation.    |
+| **Data Integrity & Accuracy** | Data are accurately represented with proper scaling and minimal errors. | Minor inaccuracies or scaling issues are present.                     | Data are significantly misrepresented or distorted.                   |
+| **Clarity & Readability**     | All elements (labels, legends, etc.) are clear, legible, and organized.  | Some elements are hard to read or slightly cluttered.                   | The plot is cluttered with illegible or missing text elements.          |
+| **Self-Containment & Utility**| Plot includes all necessary details (titles, labels, legends) for stand-alone understanding. | Key details are missing, requiring some effort to grasp the plot's intent. | Essential information is absent, leaving the viewer confused.         |
+| **Overall Visual Quality**    | Clean design that focuses on clear data communication.               | Visual distractions are present but do not severely hinder understanding. | Distracting design elements significantly impair data communication.  |
+
             
-            Your analysis should be thorough but concise, focusing on the most important aspects of the visualization.
             
-            If given specific questions about the plot, answer them directly and clearly.""",
+            Your analysis should be thorough but concise, focusing on the most important aspects of the visualization. Give the score (Good, Fair, Poor) for each of the criteria above and explain why briefly. The goal is to help the plot creator understand how to improve the plot and also help readers to be aware of the flaws in the plot.
+            
+            If given specific questions about the plot, answer them directly and clearly.
+            
+            Your response should always be in this format:
+
+            **OVERALL EXPLANATION OF PLOT**
+            [OVERALL EXPLANATION OF PLOT with analysis of what the plot shows]
+            [For this part, try to describe the plot in a way that a blind person can understand what the plot shows and what it is trying to communicate]
+            [Try to estimate the range of values in the plot, if possible]
+
+            **CRITIQUE OF PLOT**
+            [CRITIQUE OF PLOT with score (Good, Fair, Poor) for each criterion and explanation]
+
+            **QUESTIONS AND ANSWERS ABOUT THE PLOT**
+            Question: [QUESTION]
+            Answer: [ANSWER]
+            
+            """,
             model_client_stream=True
         )
 
@@ -170,7 +199,7 @@ async def analyze_plot_file(filepath: str, prompt: str | None = None) -> str:
             source="user"
         )
 
-        # Get the response
+        # Get the response - directly await the agent's response without Console wrapper
         response = await agent.on_messages(
             messages=[message],
             cancellation_token=None

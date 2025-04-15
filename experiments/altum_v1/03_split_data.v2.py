@@ -574,7 +574,7 @@ When splitting biological data, you MUST consider the following hierarchical sou
 #
 # 2. IF MULTIPLE DATASETS ARE PRESENT, separates datasets between test and train/val as follows:
 #    - NEVER select just one dataset for testing
-#    - Allocate at least 33% of total datasets to test set, when possible
+#    - Allocate at least 20% of total datasets to test set, when possible
 #    - Select datasets that collectively provide adequate representation across:
 #      * Age distribution (priority #1)
 #      * Sex distribution (priority #2)
@@ -582,7 +582,7 @@ When splitting biological data, you MUST consider the following hierarchical sou
 #
 # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
 #
-# 4. Provides SUFFICIENT test data (at least 33% of total samples, when possible)
+# 4. Provides SUFFICIENT test data (at least 20% of total samples, when possible)
 #
 # 5. For train/val splits, you do NOT need to split by dataset
 #    - Train/val can come from the same datasets
@@ -623,7 +623,7 @@ As the ML/Data Engineer, you have received the data splitting specification from
 #
 # 2. IF MULTIPLE DATASETS ARE PRESENT, separates datasets between test and train/val as follows:
 #    - NEVER select just one dataset for testing
-#    - Allocate at least 33% of total datasets to test set, when possible
+#    - Allocate at least 20% of total datasets to test set, when possible
 #    - Select datasets that collectively provide adequate representation across:
 #      * Age distribution (priority #1)
 #      * Sex distribution (priority #2)
@@ -631,7 +631,7 @@ As the ML/Data Engineer, you have received the data splitting specification from
 #
 # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
 #
-# 4. Provides SUFFICIENT test data (at least 33% of total samples, when possible)
+# 4. Provides SUFFICIENT test data (at least 20% of total samples, when possible)
 #
 # 5. For train/val splits, you do NOT need to split by dataset
 #    - Train/val can come from the same datasets
@@ -645,7 +645,7 @@ As the ML/Data Engineer, you have received the data splitting specification from
       - If multiple datasets exist, determine which combinations would make a representative test set
    
    b) SECOND: If multiple datasets exist, strategically select datasets for the test set that:
-      - Collectively contain at least 33% of the total samples, when possible
+      - Collectively contain at least 20% of the total samples, when possible
       - Represent the overall data distribution as closely as possible
       - Cover the age range adequately (most important)
       - If only one dataset exists, use standard random splitting techniques instead
@@ -749,7 +749,7 @@ SUBTASK_2_REVISION_TEXT="""
 # 1. You MUST select MULTIPLE datasets for testing
 #
 # 2. Your test datasets should:
-#    - Collectively contain at least 33% of total samples, when possible
+#    - Collectively contain at least 20% of total samples, when possible
 #    - Represent the overall distribution of age, sex, and tissue
 #    - Have NO overlap with train/validation datasets
 #
@@ -1321,7 +1321,7 @@ async def main(args=None):
     print("⚠️ CRITICAL DATA SPLITTING REQUIREMENT ⚠️")
     print("IF MULTIPLE DATASETS EXIST:")
     print("  - The test set MUST contain samples from multiple datasets not in train/val")
-    print("  - Test set should be at least 33% of data, when possible")
+    print("  - Test set should be at least 20% of data, when possible")
     print("  - Test and train/val sets MUST have completely separate datasets")
     print("IF ONLY ONE DATASET EXISTS:")
     print("  - Use appropriate stratification techniques for splitting")

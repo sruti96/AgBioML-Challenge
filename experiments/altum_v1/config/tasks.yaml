@@ -260,25 +260,29 @@ tasks:
         #
         # 2. IF MULTIPLE DATASETS ARE PRESENT, separates datasets between test and train/val as follows:
         #    - NEVER select just one dataset for testing
-        #    - Allocate at least 33% of total datasets to test set, when possible
+        #    - Allocate at least 20% of total datasets to test set, when possible
         #    - Select datasets that collectively provide adequate representation across:
-        #      * Age distribution (priority #1)
-        #      * Sex distribution (priority #2)
-        #      * Tissue types (priority #3)
+        #      * Tissue types (HIGHEST PRIORITY)
+        #      * Age distribution (SECOND PRIORITY)
+        #      * Sex distribution (THIRD PRIORITY)
+        #
+        # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
         #
         # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
         #
-        # 4. Provides SUFFICIENT test data (at least 33% of total samples, when possible)
+        # 4. Provides SUFFICIENT test data (at least 20% of total samples, when possible)
         #
         # 5. For train/val splits, you do NOT need to split by dataset
         #    - Train/val can come from the same datasets
         #    - Use standard stratification approaches for train/val
 
         For the epigenetic clock model:
-        - Age prediction is the primary goal, so ensure age distributions are similar across splits
-        - Consider tissue-type representation in each split, as methylation patterns vary by tissue. 
-                - Even if it's not possible to split perfectly, try to ensure that the splits are as balanced as possible.
-        - Sex is a known confounder in methylation studies and should be balanced in each split
+        - Consider tissue-type representation in each split, as methylation patterns vary by tissue (HIGHEST PRIORITY)
+        - Age prediction is the primary goal, so ensure age distributions are similar across splits (SECOND PRIORITY)
+        - Sex is a known confounder in methylation studies and should be balanced in each split (THIRD PRIORITY)
+
+            - Even if it's not possible to split perfectly, try to ensure that the splits are as balanced as possible.
         - Always prioritize higher-level sources of variance (study/dataset) over lower-level ones (donor/batch/sample) when making splitting decisions
 
         Your output should be a detailed specification document that Team B can implement. It MUST include 
@@ -309,15 +313,18 @@ tasks:
         #
         # 2. IF MULTIPLE DATASETS ARE PRESENT, separates datasets between test and train/val as follows:
         #    - NEVER select just one dataset for testing
-        #    - Allocate at least 33% of total datasets to test set, when possible
+        #    - Allocate at least 20% of total datasets to test set, when possible
         #    - Select datasets that collectively provide adequate representation across:
-        #      * Age distribution (priority #1)
-        #      * Sex distribution (priority #2)
-        #      * Tissue types (priority #3)
+        #      * Tissue types (HIGHEST PRIORITY)
+        #      * Age distribution (SECOND PRIORITY)
+        #      * Sex distribution (THIRD PRIORITY)
+        #
+        # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
         #
         # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
         #
-        # 4. Provides SUFFICIENT test data (at least 33% of total samples, when possible)
+        # 4. Provides SUFFICIENT test data (at least 20% of total samples, when possible)
         #
         # 5. For train/val splits, you do NOT need to split by dataset
         #    - Train/val can come from the same datasets
@@ -331,7 +338,7 @@ tasks:
               - If multiple datasets exist, determine which combinations would make a representative test set
            
            b) SECOND: If multiple datasets exist, strategically select datasets for the test set that:
-              - Collectively contain at least 33% of the total samples, when possible
+              - Collectively contain at least 20% of the total samples, when possible
               - Represent the overall data distribution as closely as possible
               - Cover the age range adequately (most important)
               - If only one dataset exists, use standard random splitting techniques instead
@@ -491,15 +498,18 @@ tasks:
         # 1. You MUST select MULTIPLE datasets for testing
         #
         # 2. Your test datasets should:
-        #    - Collectively contain at least 33% of total samples, when possible
-        #    - Represent the overall distribution of age, sex, and tissue
+        #    - Collectively contain at least 20%% of total samples, when possible
+        #    - Represent the overall distribution with this priority order:
+        #      * Tissue types (HIGHEST PRIORITY)
+        #      * Age distribution (SECOND PRIORITY)
+        #      * Sex distribution (THIRD PRIORITY)
         #    - Have NO overlap with train/validation datasets
+        #
+        # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
         #
         # IF ONLY ONE DATASET EXISTS:
         # 3. You should use appropriate stratification techniques
-        #
-        # 4. You MUST explicitly demonstrate the representativeness of your test set
-        #    with clear visualizations and statistics
 
         As the ML/Data Engineer, you have received FEEDBACK on your previous implementation from Team A. Your task is to:
 
