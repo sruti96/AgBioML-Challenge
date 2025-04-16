@@ -132,6 +132,7 @@ async def run_subtask_2(iteration=1, task_env=None, retry_count=0):
         
         # Initialize engineer team
         engineer_agent = initialize_agents(agent_configs=agent_configs, selected_agents=['engineer'], tools=available_tools)['engineer']
+        breakpoint()
         engineer_termination_token = get_agent_token(agent_configs, "engineer")
         # Add code executor to the engineer team
         code_executor = DockerCommandLineCodeExecutor(

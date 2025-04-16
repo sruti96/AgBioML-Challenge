@@ -127,7 +127,7 @@ async def run_subtask_1(task_env=None):
     # Format the task with previous context
     formatted_task = await format_structured_task_prompt(stage, subtask, task_text, iteration)
     
-    result = await Console(task_group.run_stream(task=formatted_task, output_stats=True))
+    result = await Console(task_group.run_stream(task=formatted_task), output_stats=True)
     
     # Save messages and summary with task description using structured approach
     await save_messages_structured(stage, subtask, iteration, result.messages, result.messages[-1].dump()["content"], task_text)

@@ -262,12 +262,13 @@ tasks:
         #    - NEVER select just one dataset for testing
         #    - Allocate at least 20% of total datasets to test set, when possible
         #    - Select datasets that collectively provide adequate representation across:
-        #      * Tissue types (HIGHEST PRIORITY)
+        #      * Tissue types (ABSOLUTE HIGHEST PRIORITY) - The test set MUST represent the tissue diversity.
         #      * Age distribution (SECOND PRIORITY)
         #      * Sex distribution (THIRD PRIORITY)
         #
         # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
-        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE TISSUE TYPE REPRESENTATION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ A TEST SET MISSING MAJOR TISSUE TYPES IS UNACCEPTABLE ⚠️
         #
         # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
         #
@@ -278,11 +279,9 @@ tasks:
         #    - Use standard stratification approaches for train/val
 
         For the epigenetic clock model:
-        - Consider tissue-type representation in each split, as methylation patterns vary by tissue (HIGHEST PRIORITY)
+        - Consider tissue-type representation in each split, as methylation patterns vary by tissue (ABSOLUTE HIGHEST PRIORITY). The test set MUST have a representative spread of tissues.
         - Age prediction is the primary goal, so ensure age distributions are similar across splits (SECOND PRIORITY)
         - Sex is a known confounder in methylation studies and should be balanced in each split (THIRD PRIORITY)
-
-            - Even if it's not possible to split perfectly, try to ensure that the splits are as balanced as possible.
         - Always prioritize higher-level sources of variance (study/dataset) over lower-level ones (donor/batch/sample) when making splitting decisions
 
         Your output should be a detailed specification document that Team B can implement. It MUST include 
@@ -315,12 +314,13 @@ tasks:
         #    - NEVER select just one dataset for testing
         #    - Allocate at least 20% of total datasets to test set, when possible
         #    - Select datasets that collectively provide adequate representation across:
-        #      * Tissue types (HIGHEST PRIORITY)
+        #      * Tissue types (ABSOLUTE HIGHEST PRIORITY) - The test set MUST represent the tissue diversity.
         #      * Age distribution (SECOND PRIORITY)
         #      * Sex distribution (THIRD PRIORITY)
         #
         # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
-        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE TISSUE TYPE REPRESENTATION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ A TEST SET MISSING MAJOR TISSUE TYPES IS UNACCEPTABLE ⚠️
         #
         # 3. Ensures NO overlap of datasets between test and train/val when multiple datasets exist
         #
@@ -499,14 +499,15 @@ tasks:
         #
         # 2. Your test datasets should:
         #    - Collectively contain at least 20%% of total samples, when possible
-        #    - Represent the overall distribution with this priority order:
-        #      * Tissue types (HIGHEST PRIORITY)
+        #    - Represent the overall distribution with this **STRICT** priority order:
+        #      * Tissue types (ABSOLUTE HIGHEST PRIORITY) - The test set MUST represent the tissue diversity.
         #      * Age distribution (SECOND PRIORITY)
         #      * Sex distribution (THIRD PRIORITY)
         #    - Have NO overlap with train/validation datasets
         #
         # ⚠️ FAILURE TO FOLLOW THESE EXACT PRIORITIES WILL LEAD TO REJECTION OF YOUR SOLUTION ⚠️
-        # ⚠️ TEAMS MUST PRIORITIZE AGE DISTRIBUTION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ TEAMS MUST PRIORITIZE TISSUE TYPE REPRESENTATION ABOVE ALL OTHER CRITERIA ⚠️
+        # ⚠️ A TEST SET MISSING MAJOR TISSUE TYPES IS UNACCEPTABLE ⚠️
         #
         # IF ONLY ONE DATASET EXISTS:
         # 3. You should use appropriate stratification techniques

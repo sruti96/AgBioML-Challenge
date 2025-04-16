@@ -50,7 +50,7 @@ class EngineerSociety(BaseChatAgent):
         2. Critic team reviews the results
         3. Result is summarized and returned regardless of critic approval
         """
-        NUM_LAST_MESSAGES = 12
+        NUM_LAST_MESSAGES = 50
         original_messages = messages
         print(f"TOKEN ESTIMATE: engineer society: {estimate_tokens(messages)}")
         print(f"NUM MESSAGES: {len(messages)}")
