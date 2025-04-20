@@ -53,6 +53,10 @@ async def query_perplexity(query: str) -> tuple[str, list[str]]:
     # Format the response
     response_dict = response.model_dump()
     content= response_dict["choices"][0]["message"]["content"]
+
+    # Strip all ``` from the content
+    content = re.sub(r'```', '<code_delimiter>', content)
+
     citations = response_dict["citations"]
     # Format the citations so that [citation_id] -> [citation_text]
     citations_dict = {id + 1: citation for id, citation in enumerate(citations)}
@@ -129,7 +133,7 @@ async def analyze_plot_file(filepath: str, prompt: str | None = None) -> str:
     try:
         # Initialize the model client
         model_client = OpenAIChatCompletionClient(
-            model="gpt-4o"
+            model="gpt-4.1-mini"
         )
 
         # Create the agent that can handle multimodal input
@@ -297,11 +301,27 @@ async def read_text_file(filepath: str) -> str:
     """
     Read the contents of a text file.
     """
+    CHARACTER_LIMIT = 10_000
     try:
         with open(filepath, 'r') as file:
-            return file.read()
+            content = file.read()
+            if len(content) > CHARACTER_LIMIT:
+                return content[:CHARACTER_LIMIT] + '... (truncated due to character limit in output of read_text_file)'
+            else:
+                return content
     except Exception as e:
         return f"Error reading text file: {str(e)}"
+    
+
+async def write_text_file(filepath: str, content: str):
+    """
+    Write the contents of a text file.
+    """
+    try:
+        with open(filepath, 'w') as file:
+            file.write(content)
+    except Exception as e:
+        return f"Error writing text file: {str(e)}"
 
 
 async def read_arrow_file(filepath: str) -> str:

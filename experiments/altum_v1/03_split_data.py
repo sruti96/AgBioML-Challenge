@@ -18,6 +18,7 @@ from autogen_agentchat.messages import TextMessage
 from autogen_core import CancellationToken
 from autogen_ext.code_executors.docker import DockerCommandLineCodeExecutor
 from autogen_agentchat.agents import CodeExecutorAgent
+from docker.types import DeviceRequest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from altum_v1.utils import (
@@ -138,7 +139,8 @@ async def run_subtask_2(iteration=1, task_env=None, retry_count=0):
         code_executor = DockerCommandLineCodeExecutor(
             image='agenv:latest',
             work_dir=task_env["workdir"],  # Use main working directory for Docker access
-            timeout=300
+            timeout=300,
+            device_requests=[DeviceRequest(count=-1, capabilities=[["gpu"]])]
         )
         await code_executor.start()
         code_executor_agent = CodeExecutorAgent('code_executor', code_executor=code_executor)
@@ -297,7 +299,6 @@ async def main(args=None):
                             # Mark stage as completed since we're skipping subtask 3
                             print(f"Data splitting completed after iteration {current_iteration}")
                             mark_stage_completed(DATA_SPLIT_STAGE)
-                            save_workflow_checkpoint(MODEL_TRAINING_STAGE, label="Ready for Model Training")
                             return
                         
                         # If we get here, we're done with the resume-specific logic

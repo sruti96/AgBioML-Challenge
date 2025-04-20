@@ -132,7 +132,8 @@ async def main():
     os.makedirs(output_dir, exist_ok=True)
     
     # Initialize the model client
-    model_client = OpenAIChatCompletionClient(model="gpt-4o")
+    # TODO: module_name should be parameterized by agents.yaml
+    model_client = OpenAIChatCompletionClient(model="gpt-4.1")
     
     # Create the engineer agent
     engineer_agent = AssistantAgent(
@@ -142,9 +143,9 @@ async def main():
         model_client_stream=True
     )
     
-    # Create the code executor agent with a timeout of 300 seconds (5 minutes)
+    # Create the code executor agent with a timeout of 600 seconds (10 minutes)
     code_executor = LocalCommandLineCodeExecutor(
-        timeout=300,
+        timeout=600,
         work_dir=output_dir
     )
     code_executor_agent = CodeExecutorAgent(

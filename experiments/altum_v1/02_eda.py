@@ -26,7 +26,7 @@ from autogen_ext.code_executors.docker import DockerCommandLineCodeExecutor
 from autogen_agentchat.agents import CodeExecutorAgent
 from autogen_agentchat.messages import TextMessage
 from autogen_core import CancellationToken
-
+from docker.types import DeviceRequest
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from altum_v1.utils import (
@@ -174,7 +174,8 @@ async def run_subtask_2(iteration=1, task_env=None, retry_count=0):
         code_executor = DockerCommandLineCodeExecutor(
             image='agenv:latest',
             work_dir=task_env["workdir"],  # Use main working directory for Docker access
-            timeout=600
+            timeout=600,
+            device_requests=[DeviceRequest(count=-1, capabilities=[["gpu"]])]
         )
         await code_executor.start()
         code_executor_agent = CodeExecutorAgent('code_executor', code_executor=code_executor)

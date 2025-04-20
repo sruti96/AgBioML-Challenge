@@ -1,4 +1,4 @@
-# flock-ag
+# Flock AG (Multi-Agent BioML Research Teams)
 
 ## Getting started
 
@@ -18,6 +18,17 @@ conda activate flock-ag
 
 pip install -r requirements.txt
 ```
+
+## Experiments
+
+This repo is, at present, primarily a collection of experiments and notes as I explore the use of multi-agent prompting for BioML research. For each experiment, there is a README with the details of the experiment and the results.
+
+Current experiments:
+
+- [altum_v1](experiments/altum_v1/README.md)
+
+
+
 
 
 

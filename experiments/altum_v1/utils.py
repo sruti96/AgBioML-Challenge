@@ -20,6 +20,7 @@ from altum_v1.tools import (
     analyze_plot_file, 
     search_directory, 
     read_text_file,
+    write_text_file,
     read_arrow_file
 )
 
@@ -92,6 +93,11 @@ def create_tool_instances():
             description="Read the contents of a text file (.txt, .csv, .tsv, .json, etc.).",
             name="read_text_file"
         ),
+        "write_text_file": FunctionTool(
+            write_text_file,
+            description="Write the contents of a text file (.txt, .csv, .tsv, .json, etc.).",
+            name="write_text_file"
+        ),
         "read_arrow_file": FunctionTool(
             read_arrow_file,
             description="Read the contents of an Arrow file (feather format) as a pandas DataFrame.",
@@ -100,9 +106,20 @@ def create_tool_instances():
     }
     return tools
 
-def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gpt-4o"):
+def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gpt-4.1"):
     """Initialize agents based on configurations."""
+
+    # TODO: module_name should be parameterized by agents.yaml
     model_client = OpenAIChatCompletionClient(model=model_name)
+
+    # Get current date once for this initialization
+    today_date = datetime.date.today().isoformat()
+
+    # Get all the agent names and descriptions
+    agent_names = [config["name"] for config in agent_configs]
+    agent_descriptions = [config["description"] for config in agent_configs]
+    # Format these into a string
+    agent_info = "\n".join([f"{name}: {description}" for name, description in zip(agent_names, agent_descriptions)])
 
     # Ensure all selected agents are in the agent_configs
     selected_agent_names = [config["name"] for config in agent_configs]
@@ -123,10 +140,37 @@ def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gp
             if tool_name in tools and tools[tool_name] is not None
         ]
         
-        # Create the agent
+        # Add info about the other agents and the current date
+        system_prompt = config.get("system_prompt", "")
+        # Add date context at the beginning
+        system_prompt = f"CONTEXT: Today's date is {today_date}.\n\n" + system_prompt
+
+        if system_prompt: # Add other context only if base prompt exists
+            system_prompt += f"""
+            The other agents on your team are: 
+            {agent_info}
+
+            The agents in the current conversation are:
+            {', '.join(selected_agents)}
+            """
+
+        # Add info about the overall workflow
+        system_prompt += f"""
+        \n
+        You are part of a scientific workflow with the following steps:
+        1. Understanding the task - Comprehending the scientific goals and current state of the field
+        2. Exploratory Data Analysis - Examining the DNA methylation data to understand its structure and patterns
+        3. Data splitting - Designing and implementing a robust data splitting strategy
+        4. Creating an evaluation script - Writing a script to evaluate the model
+        5. Buidling models - Building and testing models
+        6. Discussion and iteration - Refining approaches based on results
+        7. Repeat steps 5 and 6 until we have a model that we are happy with.
+        \n
+        """
+
         agents[config["name"]] = AssistantAgent(
             name=config["name"],
-            system_message=config.get("system_prompt", ""),
+            system_message=system_prompt,
             model_client=model_client,
             tools=agent_tools,
             model_client_stream=True,

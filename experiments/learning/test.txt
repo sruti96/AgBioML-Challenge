@@ -1,4 +1,0 @@
-This is a test file.
-It contains multiple lines of text.
-Each line has different content.
-The last line is here.

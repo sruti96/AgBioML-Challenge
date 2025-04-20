@@ -112,42 +112,6 @@ tasks:
         - Make code reusable and maintainable
         - Document all implementation choices
         
-    subtask_2_revision:
-      text: >
-        # CURRENT WORKFLOW STEP: Task 2, Subtask 2 - Exploratory Data Analysis (REVISION)
-
-        # TEAM COMPOSITION:
-        # - ML/Data Engineer: Implements the technical solutions in code based on the team's plans
-        # - Code Executor: Executes the code and returns the results.
-
-        # IMPORTANT: This is ITERATION {iteration} of this subtask. You are expected to address the feedback provided by Team A in their review.
-
-        As the ML/Data Engineer, you have received FEEDBACK on your previous implementation from Team A. Your task is to:
-
-        1. Review Team A's feedback carefully and acknowledge each point
-        2. Implement the requested revisions and additional analyses
-        3. Address all the issues and suggestions raised by the review team
-        4. Enhance your previous implementation based on their guidance
-        5. Create a revised comprehensive report that includes:
-           - Response to each feedback point
-           - Updated code implementation
-           - New or enhanced visualizations
-           - Additional analyses requested
-           - Revised findings and insights
-
-        Your revised report should:
-        - Begin with a clear acknowledgment of the feedback points you're addressing
-        - Explicitly reference how each implementation change responds to the feedback
-        - Include improved visualizations and analyses as requested
-        - Highlight new insights discovered through the revisions
-        - Note any ongoing challenges or limitations
-
-        Remember to:
-        - Maintain high-quality code with appropriate comments
-        - Continue following computational efficiency guidelines
-        - Ensure all visualizations are properly saved and documented
-        - Address ALL the feedback points from Team A
-        - Provide a complete, standalone report that incorporates the revisions
         
     subtask_3:
       text: >
@@ -727,3 +691,351 @@ tasks:
            * Print the exact count and percentage of items in each category
            * Verify these numbers match what's shown in the plot
            * If any category appears missing or incorrectly sized, recreate the plot 
+
+  create_evaluation:
+    subtask_1:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 4, Subtask 1 - Evaluation Strategy (Team A Discussion)
+
+        # TEAM COMPOSITION:
+        # - Principal Scientist: Team leader who makes key research decisions.
+        # - Machine Learning Expert: Provides insights on model evaluation approaches.
+        # - Bioinformatics Expert: Provides insights on epigenetic data handling and biological validation.
+
+        The data splitting is complete. Before proceeding to model training, your team needs to define a comprehensive evaluation strategy for the epigenetic clock model. Your task is to:
+
+        1. Review the overall project goal (Pearson R >= 0.9) and previous steps.
+        2. Define the specific evaluation metrics required. 
+        3. Specify the necessary visualizations. 
+        4. Define the required tabular outputs (e.g., a table summarizing the key metrics).
+        5. Specify the requirements for the evaluation script to be created by the engineer
+
+        NOTE: Your ONLY task is to consider how the engineer should construct the evaluation script, not to propose modeling approaches or baselines. We will tackle that in the next step.
+        NOTE: The evaluation script should be able to be used as a CLI tool in a manner like this: python evaluation_script.py --true_values path/to/true_values.csv --predicted_values path/to/predicted_values.csv
+
+        Your output should be a detailed specification document for the engineer. The Principal Scientist will summarize the discussion and provide the final specification.
+
+        Remember to:
+        - Be specific about metric calculations and plot details (e.g., axis labels, annotations).
+        - Consider edge cases or potential issues in evaluation.
+        - Ensure the evaluation plan directly addresses the project's success criteria.
+        
+    subtask_2:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 4, Subtask 2 - Evaluation Script Implementation
+
+        # TEAM COMPOSITION:
+        # - ML/Data Engineer: Implements the technical solutions.
+        # - Code Executor: Executes the code.
+
+        As the ML/Data Engineer, you have received the evaluation strategy specification from Team A. Your task is to:
+
+        1. Review the specification document carefully.
+        2. Implement a Python script (`evaluation_script.py`) that can be used as a CLI tool to perform the specified model evaluation.
+           - The script MUST accept file paths for true values and predicted values as arguments
+           - The script MUST use an argument parser to handle these inputs and provide a help message
+           - It MUST calculate the metrics specified in the evaluation strategy
+           - Evaluations should be created for the whole dataset and with respect to metadata columns (e.g. sex, tissue type, etc.)
+           - It MUST generate the plots specified in the evaluation strategy
+           - It MUST output the calculated metrics in a clear format (e.g., print to console or save to a results file/table).
+        3. Ensure the script saves the generated plot to the designated output directory.
+        4. Test the script using placeholder/dummy data (e.g., two small arrays or dataframes) to ensure it runs correctly and produces outputs in the expected format. You MUST show the output from this test run.
+        5. Create a comprehensive report that includes:
+           - The final code for `evaluation_script.py`.
+           - Confirmation that the script runs successfully on dummy data.
+           - Example output (metrics and confirmation of plot saving) from the test run.
+           - Clear instructions on how to run the script with actual data files.
+
+        # IMPORTANT REQUIREMENTS:
+        - Follow all coding best practices, performance guidelines, and file saving instructions from your main system prompt.
+        - Ensure the scatter plot is clear, well-labeled, and includes all required elements (identity line, annotations).
+        - Verify the metrics calculations are correct.
+
+        # CRITICAL COMPLETION PROTOCOL
+        # To properly conclude your task:
+        # 1. Provide the complete, final code for `evaluation_script.py`.
+        # 2. Show the output from running the script on dummy data.
+        # 3. Verify that the plot file was saved correctly.
+        # 4. Include the standard "Generated Files" and "Generated Plots" sections.
+        # 5. Follow your system prompt guidelines for finalizing your report and using the termination token.
+        
+  model_building:
+    subtask_1:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 5, Subtask 1 - Model Design (Team A Discussion)
+
+        # TEAM COMPOSITION:
+        # - Principal Scientist: Team leader, guides decisions.
+        # - ML Expert: Recommends ML architecture and training procedures.
+        # - Bioinformatics Expert: Ensures biological relevance and data handling best practices.
+
+        The data splitting and evaluation script creation stages are complete. The next step is to design the initial machine learning model for predicting chronological age from DNA methylation data.
+
+        CRITICAL CONTEXT: The required data splits (`train.arrow`, `val.arrow`, `test.arrow` and their metadata counterparts `train_meta.arrow`, `val_meta.arrow`, `test_meta.arrow`) have ALREADY been created in the stage 3 working directory. DO NOT redo the data splitting.
+
+        Your task is to design **EXACTLY ONE** specific ML model and training approach. Your specification must include:
+
+        1.  **Model Architecture:** Define the precise model type (e.g., ElasticNet, RandomForestRegressor, GradientBoostingRegressor, VAE, ResNet, etc.). Specify key hyperparameters (e.g., alpha/l1_ratio for ElasticNet, number of trees/depth for RandomForest, learning rate/hidden layers for NN).
+        2.  **Feature Selection/Engineering (if any):** Specify any required feature selection or transformation steps *before* training, based on EDA findings. If none, state explicitly.
+        3.  **Training Procedure:** Detail how the model should be trained using the `train.arrow` and `val.arrow` data. Include:
+            - Loss function.
+            - Optimization algorithm (if applicable).
+            - Number of epochs or training iterations (suggest a reasonable starting point).
+            - Early stopping criteria (if applicable).
+        4.  **Training Script Requirements (`train_model.py`):**
+            - Input: Paths to training features (`train.arrow`) and training metadata (`train_meta.arrow`), validation features (`val.arrow`) and validation metadata (`val_meta.arrow`).
+            - Output: A saved model file (e.g., `trained_model.pkl`, `model.h5`) in the designated output directory. Optionally, save training history/logs.
+            - Functionality: Train the specified model using the defined procedure.
+        5.  **Prediction Script Requirements (`predict.py`):**
+            - Input: Path to a saved model file and path to input feature data (e.g., `test.arrow`).
+            - Output: A predictions file (e.g., `predictions.csv` with columns `sample_id`, `predicted_age`) saved to the designated output directory.
+            - Functionality: Load the specified model, generate predictions on the input data.
+
+        Your output must be a clear, detailed specification document for the engineer. The Principal Scientist will summarize the discussion and provide the final specification.
+
+        Remember to:
+        - Focus on designing *one* well-defined model first.
+        - Justify your choices based on previous findings (EDA, data splitting).
+        - Be specific about hyperparameters and implementation details.
+        
+    subtask_2:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 5, Subtask 2 - Model Training & Prediction Script Implementation
+
+        # TEAM COMPOSITION:
+        # - ML/Data Engineer: Implements the scripts.
+        # - Code Executor: Executes the code.
+
+        As the ML/Data Engineer, you have received the model design specification from Team A. Your task is to implement and test the training and prediction scripts.
+
+        CRITICAL CONTEXT: The required data splits (`train.arrow`, `val.arrow`, `test.arrow` and their metadata counterparts `train_meta.arrow`, `val_meta.arrow`, `test_meta.arrow`) are available in the stage 3 working directory.
+
+        Your tasks are:
+
+        1.  **Implement Training Script (`train_model.py`):**
+            - Create a Python script based *exactly* on Team A's specification.
+            - Use an argument parser (`argparse`) to handle input file paths for train/val data and the output path for the saved model.
+            - Implement the specified model architecture, feature handling, and training procedure.
+            - Ensure the script saves the trained model to the designated output directory (`{output_dir}`).
+
+        2.  **Test Training Script:**
+            - Run `train_model.py` with the actual `train.arrow`/`train_meta.arrow` and `val.arrow`/`val_meta.arrow` files.
+            - **IMPORTANT:** For this test run, limit training significantly (e.g., use only a small fraction of data, very few epochs/iterations) to ensure it completes quickly within execution limits.
+            - Verify that a model file is successfully saved to the output directory.
+            - Show the terminal output of this test run.
+
+        3.  **Implement Prediction Script (`predict.py`):**
+            - Create a Python script based *exactly* on Team A's specification.
+            - Use `argparse` to handle input file paths for the saved model and the feature data to predict on.
+            - Specify the output path for the predictions file.
+            - The script should load the model saved in the previous step and generate predictions.
+            - The output file (e.g., `predictions.csv`) should contain `sample_id` and `predicted_age` columns.
+            - It should also save the ground-truth values in a separate file (e.g., `ground_truth.csv`) in the output directory.
+            - Both prediction and ground-truth files should be ordered in the same way since they are matched by `sample_id`.
+            - Both predictions and ground-truth files should contain all metadata columns
+
+        4.  **Test Prediction Script:**
+            - Run `predict.py` using the model saved during the training test run.
+            - Use a small subset of the validation data (`val.arrow`) or dummy data as input for this test.
+            - Verify that a predictions file is successfully created in the output directory.
+            - Show the terminal output and the first few lines (`head()`) of the generated predictions file.
+
+        5.  **Create Comprehensive Report:** Include:
+            - Final code for `train_model.py`.
+            - Final code for `predict.py`.
+            - Confirmation and output logs from the *test run* of `train_model.py`.
+            - Confirmation and output (including `head()` of predictions) from the *test run* of `predict.py`.
+            - Clear instructions on how to run both scripts for full training and prediction.
+
+        # IMPORTANT REQUIREMENTS:
+        - Adhere strictly to Team A's model specification.
+        - Follow all coding best practices, performance guidelines, file saving instructions, and script writing templates (using template #2 for saving scripts) from your main system prompt.
+        - Ensure model saving/loading works correctly.
+
+        # CRITICAL COMPLETION PROTOCOL
+        # To properly conclude your task:
+        # 1. Provide the complete, final code for `train_model.py`.
+        # 2. Provide the complete, final code for `predict.py`.
+        # 3. Show output from test runs of both scripts.
+        # 4. Verify saved model and prediction files were created and have the correct number of rows and headers.
+        # 5. Include the standard "Generated Files" section listing `train_model.py`, `predict.py`, the saved model file, and the test prediction file.
+        # 6. Follow your system prompt guidelines for finalizing your report and using the termination token.
+        
+    # Note: No subtask_2_revision needed for model building initially, 
+    # Revisions will happen based on evaluation results in later stages.
+        
+  train_evaluate:
+    subtask_1:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 6, Subtask 1 - Training & Evaluation Planning (Team A Discussion)
+
+        # TEAM COMPOSITION:
+        # - Principal Scientist: Team leader, guides decisions.
+        # - ML Expert: Advises on training finalization and evaluation interpretation.
+        # - Bioinformatics Expert: Considers biological plausibility of results.
+
+        The initial model design, training script (`train_model.py`), prediction script (`predict.py`), and evaluation script (`evaluation_script.py`) are complete. Now, we need to plan the full model training run and how evaluation will be performed.
+
+        CRITICAL CONTEXT:
+        - Data Splits: `train.arrow`, `val.arrow`, `test.arrow` (and metadata) are in the stage 3 workdir (`task_3_workdir`).
+        - Scripts: `train_model.py`, `predict.py` are in the stage 5 output dir (`task_5_workdir`).
+        - Evaluation Script: `evaluation_script.py` is in the stage 4 output dir (`task_4_workdir`).
+
+        Your task is to specify the execution plan for the engineer:
+
+        1.  **Final Training Configuration:** Define the exact parameters for the *full* run of `train_model.py` (e.g., number of epochs, batch size, fraction of data to use - likely 1.0 for final training).
+        2.  **Script Modifications (if any):** Specify if any changes are needed to `train_model.py` or `predict.py` before the final run. If none, state explicitly.
+        3.  **Prediction Runs:** Specify which datasets (`val.arrow`, `test.arrow`, or both) the `predict.py` script should be run on using the final trained model.
+        4.  **Evaluation Execution:** Detail how and when `evaluation_script.py` should be used:
+            - Run on predictions from which dataset(s)? (`val`, `test`?)
+            - Should evaluation happen during training (e.g., using validation data each epoch) or only after training completes? If during training, how should `train_model.py` be modified to incorporate this?
+            - Specify the final expected evaluation outputs (metrics file/table, plots).
+        5.  **Expected Outputs:** List all files expected at the end of the next subtask (e.g., final saved model, final prediction file(s), final evaluation report/plots).
+
+        Your output must be a clear, step-by-step execution plan for the engineer. The Principal Scientist will summarize the discussion and provide the final specification.
+
+        Remember to:
+        - Be precise about execution commands and parameters.
+        - Clearly state which datasets to use for prediction and evaluation.
+        
+    subtask_2:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 6, Subtask 2 - Execute Training & Evaluation
+
+        # TEAM COMPOSITION:
+        # - ML/Data Engineer: Executes the plan.
+        # - Code Executor: Executes the code.
+
+        As the ML/Data Engineer, you have received the final training and evaluation plan from Team A.
+
+        CRITICAL CONTEXT:
+        - Data Splits: Located in `task_3_workdir/`
+        - Training/Prediction Scripts: Located in `task_5_workdir/`
+        - Evaluation Script: Located in `task_4_workdir/`
+        - Your Current Output Directory: `{output_dir}`
+
+        Your task is to execute the plan precisely:
+
+        1.  **Copy Scripts:** Copy `train_model.py`, `predict.py` from `task_5_workdir` and `evaluation_script.py` from `task_4_workdir` into your current working directory (`{workdir}`).
+        2.  **Modify Scripts (if specified):** Implement any minor modifications to the copied scripts as detailed in Team A's plan.
+        3.  **Execute Full Training:** Run the `train_model.py` script using the exact configuration (epochs, data paths, etc.) specified by Team A. Ensure the final trained model is saved to `{output_dir}`.
+            - **IMPORTANT:** Use the full paths to the data in `task_3_workdir` when calling the script.
+            - Monitor execution time. This may take longer than previous test runs.
+        4.  **Execute Prediction:** Run the `predict.py` script using the final trained model (from `{output_dir}`) on the dataset(s) specified by Team A (e.g., `task_3_workdir/val.arrow`, `task_3_workdir/test.arrow`). Ensure prediction files are saved to `{output_dir}`.
+        5.  **Execute Evaluation:** Run the `evaluation_script.py` using the prediction file(s) and corresponding ground truth file(s) as specified. Ensure evaluation outputs (metrics, plots) are saved to `{output_dir}`.
+        6.  **Create Comprehensive Report:** Include:
+            - Confirmation that scripts were copied and modified (if applicable).
+            - The exact command used to run `train_model.py` and confirmation of completion/model saving.
+            - The exact command(s) used to run `predict.py` and confirmation of prediction file generation.
+            - The exact command(s) used to run `evaluation_script.py`.
+            - The final evaluation metrics reported by the script.
+            - List all key generated files (final model, prediction file(s), evaluation plot(s), metrics file).
+
+        # IMPORTANT REQUIREMENTS:
+        - Follow Team A's execution plan EXACTLY.
+        - Use full paths when referencing files in other task directories.
+        - Ensure all specified output files are generated in `{output_dir}`.
+        - Follow all coding best practices, performance guidelines, and file saving instructions from your main system prompt.
+
+        # CRITICAL COMPLETION PROTOCOL
+        # To properly conclude your task:
+        # 1. Confirm successful execution of all steps.
+        # 2. Report the final evaluation metrics.
+        # 3. Include the standard "Generated Files" and "Generated Plots" sections, listing all final outputs saved in `{output_dir}`.
+        # 4. Follow your system prompt guidelines for finalizing your report and using the termination token.
+
+    # Note: No revision task needed here typically. Iteration on model performance would likely loop back to Stage 5 (Model Building) or require a new strategy.
+        
+  review_iterate:
+    subtask_1:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 7, Subtask 1 - Review Results & Plan Next Iteration (Team A Discussion)
+
+        # TEAM COMPOSITION:
+        # - Principal Scientist: Team leader, guides decisions, synthesizes findings.
+        # - ML Expert: Analyzes model performance, suggests improvements.
+        # - Bioinformatics Expert: Assesses biological plausibility, suggests feature/data handling improvements.
+
+        The first full model training and evaluation cycle (Stage 6) is complete. Your team needs to critically review the results and plan the next iteration to improve the epigenetic clock's performance towards the goal (Pearson R >= 0.9).
+
+        CRITICAL CONTEXT:
+        - Review the final evaluation report from Stage 6 (metrics, plots).
+        - Consider the model design from Stage 5 and the training process from Stage 6.
+        - YOU MUST USE perplexity_search AT LEAST ONCE.
+
+        Your task is to:
+
+        1.  **Analyze Evaluation Results:** Discuss the performance metrics (Pearson R, MAE, RMSE) and visualizations (scatter plot, error plots) from Stage 6. Identify strengths and weaknesses of the current model.
+        2.  **Diagnose Performance Issues:** Hypothesize reasons for performance limitations (e.g., underfitting, overfitting, poor feature representation, suboptimal hyperparameters, issues highlighted by specific tissue types or age groups).
+        3.  Review literature on epigenetic clocks to find potential improvements. YOU MUST USE perplexity_search AT LEAST ONCE.
+        4.  **Propose Improvements:** Brainstorm and decide on specific, actionable changes for the next iteration. This could involve:
+            - Modifying hyperparameters of the *existing* model.
+            - Adjusting feature selection/engineering.
+            - Trying a *different* model architecture.
+            - Modifying the training procedure (e.g., learning rate schedule, data augmentation if applicable).
+        5.  **Define Next Specification:** Create a clear specification for the engineer for the *next* round. This specification should detail:
+            - **EITHER:** Changes to the existing `train_model.py` / `predict.py` scripts (if modifying the previous model/training). Specify exactly what needs to change.
+            - **OR:** A complete design for a *new* model (if trying a different architecture), following the same structure as the Stage 5, Subtask 1 specification.
+            - Specify the parameters for the next run of `train_model.py` and the subsequent prediction/evaluation steps.
+
+        Your output must be a detailed specification document outlining the analysis of the previous results and the plan for the next modeling iteration. The Principal Scientist will summarize the discussion and provide the final specification.
+
+        Remember to:
+        - Base your decisions on the evidence from the evaluation results.
+        - Be specific and justify your proposed changes.
+        - Clearly define the goal for the next iteration.
+        - Research and propose improvments based on the literature (remember to use perplexity to check your sources)
+        
+        IMPORTANT RULES:
+          - The engineer only has access to datasets which they can obtain programmatically.
+          - Do NOT request that they curate novel datasets (e.g., from the supplementary files of published papers).
+          - Do NOT request that they use any dataset which is not publicly available.
+      
+    subtask_2:
+      text: >
+        # CURRENT WORKFLOW STEP: Task 7, Subtask 2 - Implement & Evaluate Iteration {iteration}
+
+        # TEAM COMPOSITION:
+        # - ML/Data Engineer: Implements the changes and executes runs.
+        # - Code Executor: Executes the code.
+
+        As the ML/Data Engineer, you have received the specification for the next modeling iteration from Team A.
+
+        CRITICAL CONTEXT - LOCATIONS OF INPUTS:
+        - Data Splits (Stage 3): `./task_3_workdir/`
+        - Previous Model/Prediction Scripts (Stage 5): `./task_5_workdir/`
+        - Evaluation Script (Stage 4): `./task_4_workdir/`
+        - Previous Trained Model (Stage 6 or previous Iteration): `./task_6_workdir/` (or previous iteration's output dir)
+        - Your Current Output Directory for this iteration: `./{output_dir}`
+
+        Your task is to implement the specified changes and re-run the training/evaluation WITH ALL OF TRAIN, VAL, AND TEST DATA:
+
+        1.  **Copy Base Scripts:** Copy necessary scripts (`train_model.py`, `predict.py`, `evaluation_script.py`) from their respective stage directories (`task_5_workdir`, `task_4_workdir`) into your current working directory (`{workdir}`).
+        2.  **Implement Changes:** Modify the copied scripts (`train_model.py`, `predict.py`) according to the **EXACT** specification from Team A (Subtask 1 of this stage).
+            - If a *new* model architecture was specified, implement it fully.
+            - If *modifications* were specified, apply them carefully.
+        3.  **Execute Training:** Run the modified `train_model.py` using the configuration parameters specified by Team A for this iteration. Save the newly trained model to `{output_dir}`.
+            - Use the full paths to the data in `task_3_workdir`.
+        4.  **Execute Prediction:** Run the modified `predict.py` using the newly trained model on the dataset(s) specified by Team A. Save prediction file(s) to `{output_dir}`.
+        5.  **Execute Evaluation:** Run `evaluation_script.py` on the new prediction file(s) and ground truth data. Save evaluation outputs (metrics, plots) to `{output_dir}`.
+        6.  **Create Comprehensive Report:** Include:
+            - Summary of changes implemented based on Team A's specification.
+            - Confirmation that scripts were copied/modified.
+            - Exact commands used for training, prediction, and evaluation.
+            - Final evaluation metrics for this iteration.
+            - List of all key generated files for this iteration (model, predictions, plots, metrics).
+
+        # IMPORTANT REQUIREMENTS:
+        - Follow Team A's specification precisely.
+        - Ensure all scripts run correctly after modification.
+        - Save all outputs for this iteration to `{output_dir}`.
+        - Ensure to run evaluations on the testing dataset before concluding the iteration.
+        - Use computational resources efficiently. Recall you have access to 220GB of RAM and an A10 GPU with 24GB of VRAM.
+        - Follow all coding best practices, performance guidelines, and file saving instructions.
+
+        # CRITICAL COMPLETION PROTOCOL:
+        # 1. Confirm successful execution of all steps.
+        # 2. Report the final evaluation metrics for THIS iteration.
+        # 3. Include the standard "Generated Files" and "Generated Plots" sections for THIS iteration's outputs.
+        # 4. Follow your system prompt guidelines for finalizing your report and using the termination token.
+        

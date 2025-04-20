@@ -60,6 +60,7 @@ async def run_understanding_task():
     agent_configs = load_agent_configs()
     available_tools = create_tool_instances()
     which_agents = ['senior_advisor', 'principal_scientist']
+    breakpoint()
     agents = initialize_agents(agent_configs=agent_configs, selected_agents=which_agents, tools=available_tools)
     
     # Get the principal scientist's termination token
