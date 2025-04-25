@@ -1,0 +1,255 @@
+description: Develop an epigenetic clock model that predicts chronological age from DNA methylation data
+name: develop_epigenetic_clock
+
+project_goal: |
+  Develop an accurate epigenetic clock to predict chronological age from DNA methylation data, 
+  with the aim of achieving state-of-the-art performance (Pearson correlation ≥ 0.9).
+
+project_context: |
+  DNA methylation patterns change with age and can be used as biomarkers to predict chronological age.
+  This epigenetic clock project involves analyzing methylation data to build a regression model
+  that accurately predicts age, which has applications in forensics, health assessment, and longevity research.
+
+available_data:
+  - name: betas.arrow
+    description: DNA methylation beta values (feature matrix)
+  - name: metadata.arrow
+    description: Sample metadata including chronological ages (target variable)
+
+autonomous_workflow:
+  approach: |
+    This project follows a collaborative, autonomous workflow where agents determine the best course
+    of action based on current project state rather than rigid predefined stages. Agents are expected to:
+    1. Continuously assess project status through the lab notebook
+    2. Identify gaps and opportunities in the current research
+    3. Propose logical next steps based on scientific merit and feasibility
+    4. Make decisions collaboratively when alternatives exist
+    5. Document all decisions and their rationale, findings, observations, tips, and lessons learned in the lab notebook
+  
+  methodology: |
+    The development process should generally include these components, though not necessarily in sequence:
+    - Exploratory data analysis
+    - Feature engineering and selection
+    - Data preprocessing and normalization
+    - Thoughtful data splits
+    - Model selection and hyperparameter tuning
+    - Performance evaluation with appropriate metrics
+    - Error analysis and model improvement
+
+  expected_outcomes:
+    - Clear documentation of data exploration findings
+    - Well-justified preprocessing and feature selection decisions
+    - At least 2-3 model approaches with comparative analysis
+    - Final model with validation and test performance metrics
+    - Critical assessment of model strengths and limitations
+    - Recommendations for future improvements
+    
+lab_notebook_guidelines: |
+  The lab notebook serves as the central coordination mechanism for the project.
+  Every entry should be dated and include:
+  - Current project status assessment
+  - Key decisions made and their rationale
+  - Results of analyses or experiments
+  - Next steps with clear rationale
+  - Open questions or challenges
+  
+  The lab notebook should maintain sufficient context for any agent to understand
+  the current state of the project, previous findings, and planned direction.
+
+# The following tasks are kept as reference materials that the agents can adapt as needed
+# Rather than being followed rigidly, they provide guidance for common workflow steps
+
+reference:
+  understanding_step:
+    text: |
+      # REFERENCE: Understanding the task step
+      
+      Key questions to consider in understanding the epigenetic clock development task:
+        1. What is the purpose of this task? How does it relate to the overall goals of the aging research field?
+        2. What prior studies have been done on this type of task? What are the main approaches and methods used?
+        3. What are the main challenges and limitations of the prior studies?
+        4. What are the most promising approaches and methods for this task?
+        5. What is the nature of the data? What normalizations and transformations should be considered?
+        6. How should the data be explored or visualized? What are some typical QC approaches for it?
+
+  eda_step:
+    text: |
+      # REFERENCE: Exploratory Data Analysis step
+      
+      Key aspects to include in your EDA
+      1. Data quality assessment
+         - Missing data analysis
+         - Distribution of beta values
+         - Check for outliers and anomalies
+      2. Sample characteristics
+         - Age distribution 
+         - Tissue type distribution
+         - Sex distribution 
+         - Other relevant metadata exploration
+      3. Correlations and relationships
+         - Correlations between probes
+         - Relationships between age and beta values
+         - Tissue-specific patterns
+      4. Dimensionality and feature considerations
+         - Total number of probes (features)
+         - Potential for dimensionality reduction
+         - Feature importance assessment methods
+      
+  data_split_step:
+    text: |
+      # REFERENCE: Data Splitting step
+
+        # CRITICAL BIOLOGICAL DATA SPLITTING GUIDELINES
+        When splitting biological data, you MUST consider the following hierarchical sources of technical variance (from largest to smallest effect):
+
+        1. Study/Dataset Level:
+           - Studies represent a data collection effort, typically performed by a single research group with their own equipment, personnel, and protocols
+           - Different studies have different protocols and equipment, which can introduce technical bias
+           - If multiple studies/datasets exist, the test set SHOULD contain data from studies NOT represented in train/val
+           - Often a major source of technical variance that can lead to overfitting
+           - Example: If your data contains only E-MTAB-2372 and E-GEOD-44763, then one would be used for training/validation and the other for testing
+
+        2. Organism/Donor Level:
+           - Every human donor has a unique genome, lifestyle, and environmental exposures
+           - Even inbred mice show biological variability
+           - Data from the same donor should NEVER be split across train/val/test sets
+           - All samples from a single donor must stay together in the same split
+
+        3. Batch Level:
+           - Represents groups of samples processed together using the same protocol and personnel (even if they are from different donors)
+           - If batch information is available, consider stratifying splits by batch
+           - Be careful not to confound batches with biological variables of interest
+
+        4. Sample Level:
+           - Samples with the same ID should never be split across datasets
+           - Multiple measurements from the same sample must stay together in the same split
+
+      # Critical priorities for splitting strategies:
+      1. Tissue type representation (HIGHEST PRIORITY) - The test set MUST represent the tissue diversity
+      2. Age distribution (SECOND PRIORITY) 
+      3. Sex distribution (THIRD PRIORITY)
+      
+  evaluation_step:
+    text: |
+      # REFERENCE: Evaluation Script Development step
+      
+      Key components to include in your evaluation script:
+      1. Core metrics
+         - Pearson correlation coefficient (primary metric)
+         - Mean Absolute Error (MAE)
+         - Root Mean Squared Error (RMSE) 
+         - Additional metrics like R-squared
+      2. Subgroup analysis
+         - Performance breakdown by tissue type
+         - Performance breakdown by age group
+         - Performance breakdown by sex
+      3. Visualizations
+         - Scatter plot of predicted vs. true ages
+         - Residual plots
+         - Tissue-specific performance plots
+      4. Implementation requirements
+         - Command-line interface
+         - Accept file paths for ground truth and predictions
+         - Output metrics in both console and saved format
+         - Generate visualizations automatically
+  
+  model_building_step:
+    text: |
+      # REFERENCE: Model Building step
+      
+      Key considerations for model building:
+      1. Model types to consider
+         - Linear regression models (ElasticNet, Lasso, Ridge)
+         - Tree-based models (Random Forest, Gradient Boosting)
+         - Neural networks (if appropriate)
+      2. Feature selection/engineering approaches
+         - Variance-based filtering
+         - Correlation with age
+         - Domain knowledge about specific CpG sites
+         - Dimensionality reduction techniques
+      3. Script requirements
+         - Training script that loads data, trains model, saves to output dir
+         - Prediction script that loads model, generates predictions on new data
+         - Clear documentation of hyperparameters
+      4. Hyperparameter considerations
+         - Regularization strength
+         - Learning rates/schedules
+         - Tree depth/number
+         - Batch size (if applicable)
+      
+  training_evaluation_step:
+    text: |
+      # REFERENCE: Model Training and Evaluation step
+      
+      Key steps in the final training and evaluation:
+      1. Configuration decisions
+         - Final hyperparameter selection
+         - Data preprocessing finalization
+         - Optimization settings
+      2. Execution workflow
+         - Full training on train set
+         - Evaluation on validation set
+         - Final evaluation on test set
+         - Comprehensive metrics collection
+      3. Analysis of results
+         - Compare to baselines
+         - Identify strengths and weaknesses
+         - Subgroup performance analysis
+         - Feature importance understanding
+      
+  iteration_step:
+    text: |
+      # REFERENCE: Review and Iteration step
+      
+      Key aspects for effective model iteration:
+      1. Analysis of current results
+         - Identify specific areas of weakness
+         - Understand error patterns
+         - Compare to literature benchmarks
+      2. Hypothesis generation
+         - Develop theories about performance limitations
+         - Review literature for potential improvements
+         - Consider alternative approaches
+      3. Implementation planning
+         - Targeted modifications to improve weak areas
+         - Experimental strategy for testing changes
+         - Clear metrics to determine success
+        
+  checklists:
+    plot_quality: |
+      # CRITICAL PLOT QUALITY CHECKLIST
+      Before finalizing any data visualization, verify that each plot meets these requirements:
+
+      1. READABILITY:
+         - All axis labels are clearly visible and properly sized
+         - Legend is readable and correctly represents the data
+         - Title clearly explains what the plot shows
+         - Text is not overlapping or cut off
+         - Font sizes are consistent and appropriately sized
+
+      2. ACCURACY:
+         - Data is correctly represented (no missing categories)
+         - Color scheme properly differentiates between categories
+         - Proportions and distributions match the underlying data
+         - No data points are accidentally excluded
+         - Scales are appropriate for the data range
+
+      3. INTERPRETABILITY:
+         - The key insight is immediately apparent 
+         - Comparisons between groups are clear
+         - For crowded categorical plots:
+           * Consider using horizontal orientation for long category names
+           * Use proper spacing or faceting to avoid overcrowding
+           * Ensure all categories are readable (rotate labels if needed)
+         
+      4. VISUAL VERIFICATION:
+         - After creating each plot, you MUST:
+           * Explicitly print summary statistics that confirm what the plot shows
+           * Compare these statistics with what's visually represented
+           * Check for any discrepancies between the numbers and the visualization
+         
+      5. QUALITY CONTROL STEPS:
+         - For each visualization, run this verification code:
+           * Print the exact count and percentage of items in each category
+           * Verify these numbers match what's shown in the plot
+           * If any category appears missing or incorrectly sized, recreate the plot 

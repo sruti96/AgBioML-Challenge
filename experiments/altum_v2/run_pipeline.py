@@ -1,0 +1,270 @@
+#!/usr/bin/env python
+"""
+Altum Pipeline - Autonomous Agent-based Workflow for Epigenetic Clock Development
+
+This script implements a unified, autonomous agent-based workflow for developing 
+an epigenetic clock to predict chronological age from DNA methylation data. 
+It uses a two-team approach:
+1. Team A (Planning): Principal scientist, ML expert, and bioinformatics expert who 
+   analyze results and plan next steps.
+2. Team B (Engineering Society): Engineer, code executor, and data science critic who
+   implement and evaluate the plans from Team A.
+
+Unlike v1, which used a rigid, multi-stage workflow, this version:
+- Runs as a single script
+- Gives agents autonomy to determine next steps
+- Uses a lab notebook for long-term memory
+- Implements a round-robin group chat between Teams A and B
+"""
+
+import os
+import sys
+import asyncio
+import argparse
+import json
+import datetime
+import logging
+from typing import List, Dict, Any, Optional
+
+# # Set up logging
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler("altum.log"),
+#         logging.StreamHandler()
+#     ]
+# )
+# logger = logging.getLogger(__name__)
+
+# AutoGen imports
+from autogen_agentchat.ui import Console
+from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_agentchat.messages import TextMessage
+from autogen_core import CancellationToken
+from autogen_ext.code_executors.docker import DockerCommandLineCodeExecutor
+from docker.types import DeviceRequest
+from autogen_agentchat.agents import CodeExecutorAgent
+
+# Local imports 
+from utils import (
+    load_agent_configs,
+    create_tool_instances,
+    initialize_agents,
+    initialize_notebook,
+    read_notebook,
+    write_notebook,
+    setup_task_environment,
+    get_task_text,
+    get_tasks_config,
+    format_prompt,
+    get_agent_token,
+    cleanup_temp_files
+)
+from agents import TeamAPlanning, EngineerSociety
+
+# Constants
+MAX_ITERATIONS = 10  # Maximum number of Team A-B exchanges
+OUTPUT_DIR = "task_outputs"  # Base directory for outputs
+NOTEBOOK_PATH = "memory/lab_notebook.md"  # Path to the lab notebook
+
+async def main(args):
+    """
+    Main function to run the Altum pipeline.
+    
+    Args:
+        args: Command-line arguments
+    """
+    print("Starting Altum pipeline")
+    
+    # Initialize lab notebook
+    initialize_notebook(NOTEBOOK_PATH)
+    
+    # Set up task environment with a unique run ID
+    run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    task_env = setup_task_environment(
+        base_dir=os.path.join(OUTPUT_DIR, f"run_{run_id}"),
+        is_restart=True
+    )
+    
+    # Load configurations
+    agent_configs = load_agent_configs(config_path="experiments/altum_v2/config/agents.yaml")
+    available_tools = create_tool_instances()
+    
+    # Get the overall task description and full task configuration
+    overall_task = get_task_text('overall', 'text', config_path="experiments/altum_v2/config/tasks.yaml")
+    task_config = get_tasks_config(config_path="experiments/altum_v2/config/tasks.yaml")
+    
+    # Write project goal and context to the lab notebook
+    if "project_goal" in task_config:
+        write_notebook(
+            entry=f"# Project Goal\n\n{task_config['project_goal']}",
+            entry_type="SETUP",
+            team="SYSTEM",
+            notebook_path=NOTEBOOK_PATH
+        )
+    
+    if "project_context" in task_config:
+        write_notebook(
+            entry=f"# Project Context\n\n{task_config['project_context']}",
+            entry_type="SETUP",
+            team="SYSTEM",
+            notebook_path=NOTEBOOK_PATH
+        )
+    
+    if "available_data" in task_config:
+        data_info = "# Available Data\n\n"
+        for data_item in task_config["available_data"]:
+            data_info += f"- **{data_item.get('name', '')}**: {data_item.get('description', '')}\n"
+        write_notebook(
+            entry=data_info,
+            entry_type="SETUP",
+            team="SYSTEM",
+            notebook_path=NOTEBOOK_PATH
+        )
+    
+    # Initialize the agents needed for Team A
+    team_a_agents = ['principal_scientist', 'bioinformatics_expert', 'ml_expert']
+    agents = initialize_agents(agent_configs=agent_configs, selected_agents=team_a_agents, tools=available_tools)
+    
+    # Get the principal scientist's termination token
+    principal_scientist_termination_token = get_agent_token(agent_configs, "principal_scientist")
+    
+    # Initialize TeamAPlanning
+    team_a = TeamAPlanning(
+        name="team_a_planning",
+        principal_scientist=agents['principal_scientist'],
+        ml_expert=agents['ml_expert'],
+        bioinformatics_expert=agents['bioinformatics_expert'],
+        principal_scientist_termination_token=principal_scientist_termination_token,
+        max_turns=15
+    )
+    
+    # Initialize engineer team for TeamB
+    engineer_agent = initialize_agents(agent_configs=agent_configs, selected_agents=['implementation_engineer'], tools=available_tools)['implementation_engineer']
+    engineer_termination_token = get_agent_token(agent_configs, "implementation_engineer")
+    
+    # Set up code executor for the engineer
+    code_executor = DockerCommandLineCodeExecutor(
+        image='agenv:latest',
+        work_dir=task_env["workdir"],
+        timeout=600,
+        device_requests=[DeviceRequest(count=-1, capabilities=[["gpu"]])]
+    )
+    await code_executor.start()
+    code_executor_agent = CodeExecutorAgent('code_executor', code_executor=code_executor)
+    
+    # Create the engineer team as a round-robin group chat
+    from autogen_agentchat.conditions import TextMentionTermination
+    engineer_team = RoundRobinGroupChat(
+        participants=[engineer_agent, code_executor_agent],
+        termination_condition=TextMentionTermination(engineer_termination_token),
+        max_turns=75
+    )
+    
+    # Initialize critic team
+    critic_agent = initialize_agents(agent_configs=agent_configs, selected_agents=['data_science_critic'], tools=available_tools)['data_science_critic']
+    critic_termination_token = get_agent_token(agent_configs, "data_science_critic")
+    critic_team = RoundRobinGroupChat(
+        participants=[critic_agent],
+        termination_condition=TextMentionTermination(critic_termination_token)
+    )
+    
+    # Get tokens for EngineerSociety
+    critic_approve_token = get_agent_token(agent_configs, "data_science_critic", "approval_token")
+    critic_revise_token = get_agent_token(agent_configs, "data_science_critic", "revision_token")
+    
+    # Initialize EngineerSociety
+    team_b = EngineerSociety(
+        name="team_b_engineering",
+        engineer_team=engineer_team,
+        critic_team=critic_team,
+        critic_approve_token=critic_approve_token,
+        engineer_terminate_token=engineer_termination_token,
+        critic_terminate_token=critic_termination_token,
+        critic_revise_token=critic_revise_token,
+        output_dir=task_env["output_dir"],
+        max_messages_to_return=25
+    )
+    
+    # Run the main loop
+    iteration = 0
+    last_team_b_output = None
+    
+    while iteration < args.max_iterations:
+        iteration += 1
+        print(f"Starting iteration {iteration}/{args.max_iterations}")
+        
+        # Step 1: Team A Planning Phase
+        print(f"Iteration {iteration}: Team A Planning Phase")
+        
+        # Read current notebook content
+        notebook_content = read_notebook(NOTEBOOK_PATH)
+        
+        # Format the prompt for Team A with current context
+        team_a_prompt = format_prompt(
+            overall_task=overall_task,
+            notebook_content=notebook_content,
+            last_team_b_output=last_team_b_output,
+            task_config=task_config
+        )
+        
+        # Run Team A to get next steps plan
+        team_a_message = TextMessage(content=team_a_prompt, source="User")
+        team_a_response = await team_a.on_messages([team_a_message], CancellationToken())
+        
+        # Log and record Team A's plan
+        print(f"Team A planning complete for iteration {iteration}")
+        write_notebook(
+            entry=team_a_response.chat_message.content,
+            entry_type="PLAN",
+            team="TEAM_A",
+            notebook_path=NOTEBOOK_PATH
+        )
+        
+        # Step 2: Team B Implementation Phase
+        print(f"Iteration {iteration}: Team B Implementation Phase")
+        
+        # Forward Team A's plan to Team B
+        team_b_message = team_a_response.chat_message
+        team_b_response = await team_b.on_messages([team_b_message], CancellationToken())
+        
+        # Store Team B's output for next iteration
+        last_team_b_output = team_b_response.chat_message.content
+        
+        # Clean up temporary files
+        cleanup_temp_files(task_env["output_dir"])
+        
+        # Log completion of iteration
+        print(f"Completed iteration {iteration}/{args.max_iterations}")
+        
+        # Write iteration summary to notebook
+        write_notebook(
+            entry=f"Completed iteration {iteration}. Team B implementation results:\n\n{last_team_b_output[:500]}...(truncated)",
+            entry_type="ITERATION_SUMMARY",
+            team="SYSTEM",
+            notebook_path=NOTEBOOK_PATH
+        )
+    
+    # Close the code executor
+    await code_executor.stop()
+    
+    print("Altum pipeline completed")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the Altum pipeline")
+    parser.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS, 
+                        help=f"Maximum number of Team A-B exchanges (default: {MAX_ITERATIONS})")
+    parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR,
+                        help=f"Base directory for outputs (default: {OUTPUT_DIR})")
+    parser.add_argument("--notebook-path", type=str, default=NOTEBOOK_PATH,
+                        help=f"Path to the lab notebook (default: {NOTEBOOK_PATH})")
+    
+    args = parser.parse_args()
+    
+    # Update constants based on arguments
+    MAX_ITERATIONS = args.max_iterations
+    OUTPUT_DIR = args.output_dir
+    NOTEBOOK_PATH = args.notebook_path
+    
+    asyncio.run(main(args)) 

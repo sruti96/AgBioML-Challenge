@@ -6,7 +6,7 @@ The pipeline will be composed of these five steps:
 
 1. Understanding the task
 2. Exploratory Data Analysis
-3. Experimental design
+3. Data splitting
 4. Model training and evaluation
 5. Discussion and iteration on experimental design
 ... Repeat until the model achieves near-SOTA accuracy

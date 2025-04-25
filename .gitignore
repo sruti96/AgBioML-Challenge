@@ -5,3 +5,5 @@ tmp
 *.png
 __pycache__/
 *.arrow
+tmp_code*
+lab_notebook.md
