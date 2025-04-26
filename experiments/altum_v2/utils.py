@@ -1,7 +1,5 @@
 import os
 import yaml
-import sys
-import json
 import datetime
 import glob
 import shutil
@@ -11,18 +9,7 @@ memory_dir = 'memory'
 
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
-from autogen_core.tools import FunctionTool
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from altum_v1.tools import (
-    query_perplexity, 
-    format_webpage, 
-    analyze_plot_file, 
-    search_directory, 
-    read_text_file,
-    write_text_file,
-    read_arrow_file
-)
 
 # Clean up temporary code files
 def cleanup_temp_files(directory: str = "."):
@@ -99,8 +86,6 @@ def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gp
         else:
             agent_descriptions.append(config.get("name", name))
     
-    # Format these into a string
-    agent_info = "\n".join([f"{name}: {description}" for name, description in zip(agent_names, agent_descriptions)])
 
     # Ensure all selected agents are in the agent_configs
     if selected_agents:
@@ -114,11 +99,12 @@ def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gp
         if selected_agents and name not in selected_agents:
             continue
             
+        other_agents_info = "\n".join([f"{name}: {description}" for name, description in zip(agent_names, agent_descriptions) if name != name])
+
         # Get tools for this agent
         agent_tools = []
-        for tool_name in config.get("tools", []):
-            if tool_name in tools and tools[tool_name] is not None:
-                agent_tools.append(tools[tool_name])
+        for tool_name in tools.keys():
+            agent_tools.append(tools[tool_name])
         
         # Use the prompt field as the system prompt
         system_prompt = config.get("prompt", "")
@@ -128,11 +114,57 @@ def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gp
         if system_prompt: # Add other context only if base prompt exists
             system_prompt += f"""
             The other agents on your team are: 
-            {agent_info}
+            {other_agents_info}
 
             The agents in the current conversation are:
             {', '.join(selected_agents or agent_names)}
             """
+        
+        # Add info about the tools available to the agent
+        system_prompt += f"""
+        \n\n**TOOLS**
+
+        Whenever you encounter a question or task cannot be solved purely through reasoning, 
+        or which would benefit from access to other data sources or resources,
+        you should use one of the following tools to assist you:
+
+        Here are their descriptions:
+        {'\n'.join([f"{tool_name}: {tools[tool_name].description}" for tool_name in tools.keys()])}
+
+        **YOU ARE HIGHLY ENCOURAGED TO USE TOOLS WHEN APPROPRIATE.**
+
+        **NOTE ABOUT LAB NOTEBOOK**
+
+        The Lab notebook is a record of all the decisions, observations, and results of the project.
+        You should read from it frequently if you cannot recall observations or results from previous steps.
+        You should also update with your observations, tips, heuristics, and lessons learned. This will mean
+        that, in the future, you will be able to improve your performance by reusing these observations.
+        
+        When writing to the notebook, you should ALWAYS use the following arguments:
+        - entry: <text of the entry to append>
+        - entry_type: <PLAN | NOTE | OUTPUT >
+        - source: <name of the agent that wrote the entry, i.e. your name>
+
+        **NOTE ABOUT OUTPUTS**
+        Whenever you generate a file, result, plot, etc. You MUST make a note of it in the notebook. 
+        Specifically, you should use the OUTPUT entry type. 
+        Make sure to include the file name and a description of the contents if there is a file.
+        For results, make sure to describe the numerical values of results (in markdown table format).
+
+        **NOTE ABOUT CSV FILES**
+        NEVER WRITE LARGE CSV FILES. ALWAYS USE ARROW FILES INSTEAD.
+        GOOD EXAMPLES
+        - betas_trainsplit.arrow
+        - betas_valsplit.arrow
+        - betas_testsplit.arrow
+        - model_evaluation.arrow
+        - model_predictions.arrow
+        - model_coefficients.arrow
+        BAD EXAMPLES
+        - betas_trainsplit.csv
+        - betas_valsplit.csv
+        - betas_testsplit.csv
+        """
 
         agents[name] = AssistantAgent(
             name=config.get("name", name),
@@ -146,7 +178,7 @@ def initialize_agents(agent_configs, tools, selected_agents=None, model_name="gp
     return agents
 
 # Lab Notebook Functions
-def initialize_notebook(notebook_path: str | None = None):
+def initialize_notebook(notebook_path: str):
     """Initialize the lab notebook file.
     
     Args:
@@ -155,20 +187,51 @@ def initialize_notebook(notebook_path: str | None = None):
     Returns:
         str: Path to the initialized notebook file
     """
-    if notebook_path is None:
-        notebook_path = os.path.join(memory_dir, 'lab_notebook.md')
-    
-    os.makedirs(os.path.dirname(notebook_path), exist_ok=True)
     
     # If the notebook doesn't exist, create it with a header
     if not os.path.exists(notebook_path):
         with open(notebook_path, 'w') as f:
-            f.write(f"# Epigenetic Clock Development Lab Notebook\n")
-            f.write(f"Created: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write(f"This notebook contains the record of experiments, decisions, and results for the epigenetic clock development project.\n\n")
-            f.write(f"## Entries\n\n")
+            to_write = f"""
+# Epigenetic Clock Development Lab Notebook
+Created: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+This notebook contains the record of experiments, decisions, and results for the 
+epigenetic clock development project.
+
+### Project Goal
+Develop an accurate epigenetic clock to predict chronological age from DNA methylation data, aiming for state-of-the-art performance (Pearson correlation ≥ 0.9).
+
+### Available Data
+- `betas.arrow`: DNA methylation beta values (feature matrix)
+- `metadata.arrow`: Sample metadata including chronological ages (target variable)
+
+**Critical Note:**
+- The data is was mined from several hundred DNA methylation studies. To assess generalization, the data should always be split with respect to the study of origin. For example, if conducting leave-one-out cross-validation, the "left-out" split should include a study or studies that are not present in the training set.
+- There is some confounding between age, tissue, and study. This is a caveat to keep in mind when interpreting the results.
+
+### Initial Project Planning
+The project will follow a flexible workflow that can include:
+1. Task understanding and data exploration
+2. Exploratory data analysis (EDA)
+3. Strategic data splitting for training/validation/testing
+4. Model selection and development
+5. Training and evaluation
+6. Iterative improvement
+
+Team A (Planning) and Team B (Implementation) will collaborate through this notebook to track progress, decisions, and results.
+
+### Next Steps
+- Team A to review the available data and formulate an initial analysis plan
+- Begin with exploratory data analysis to understand feature distribution and characteristics 
+
+# Entries
+
+<!-- Entries will go here -->
+
+"""
+            f.write(to_write)
     
-    return notebook_path
+    return None
 
 def read_notebook(notebook_path: str | None = None):
     """Read the entire lab notebook content.
@@ -179,47 +242,47 @@ def read_notebook(notebook_path: str | None = None):
     Returns:
         str: The entire content of the notebook
     """
+    NOTEBOOK_CHAR_LIMIT = 100_000
+
     if notebook_path is None:
-        notebook_path = os.path.join(memory_dir, 'lab_notebook.md')
+        notebook_path = "lab_notebook.md"
     
     try:
         with open(notebook_path, 'r') as f:
-            return f.read()
+            content = f.read()
+            # Error if content is > 100k characters
+            if len(content) > NOTEBOOK_CHAR_LIMIT:
+                print("ERROR: Lab notebook content is too long. Please truncate it to 100,000 characters or less.")
+                content = content[-NOTEBOOK_CHAR_LIMIT:]
+            return content
     except FileNotFoundError:
         # Initialize the notebook if it doesn't exist
         initialize_notebook(notebook_path)
         return read_notebook(notebook_path)  # Recursively call to get the initialized content
 
-def write_notebook(entry: str, entry_type: str = "NOTE", team: str = "SYSTEM", notebook_path: str | None = None):
+def write_notebook(entry: str, entry_type: str = "NOTE", source: str = "SYSTEM"):
     """Append an entry to the lab notebook.
     
     Args:
         entry: The content to append to the notebook
-        entry_type: Type of entry (e.g., NOTE, PLAN, RESULT, METRIC)
-        team: Source of the entry (e.g., SYSTEM, TEAM_A, TEAM_B)
-        notebook_path: Path to the notebook file. If None, uses default path.
+        entry_type: Type of entry (e.g., NOTE, PLAN, OUTPUT)
+        source: Name of agent that wrote the entry
     
     Returns:
         str: The entry that was appended, with metadata
     """
-    if notebook_path is None:
-        notebook_path = os.path.join(memory_dir, 'lab_notebook.md')
-    
-    # Ensure the notebook exists
-    if not os.path.exists(notebook_path):
-        initialize_notebook(notebook_path)
     
     # Format the entry with metadata
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    formatted_entry = f"\n### [{timestamp}] {team} - {entry_type}\n\n{entry}\n\n"
+    formatted_entry = f"\n### [{timestamp}] {source} - {entry_type}\n\n{entry}\n\n"
     
     # Append the entry to the notebook
-    with open(notebook_path, 'a') as f:
+    with open("lab_notebook.md", 'a') as f:
         f.write(formatted_entry)
     
     return formatted_entry
 
-def format_prompt(overall_task, notebook_content=None, last_team_b_output=None, task_config=None):
+def format_prompt(notebook_content=None, last_team_b_output=None, task_config=None):
     """Format a prompt with notebook content and last Team B output.
     
     Args:
@@ -232,46 +295,9 @@ def format_prompt(overall_task, notebook_content=None, last_team_b_output=None, 
         str: Formatted prompt with all context
     """
     prompt_parts = []
-    
-    # Add the overall task
-    prompt_parts.append("# OVERALL TASK")
-    prompt_parts.append(overall_task)
-    prompt_parts.append("")
-    
-    # Add project context from task_config if available
-    if task_config:
-        if "project_goal" in task_config:
-            prompt_parts.append("# PROJECT GOAL")
-            prompt_parts.append(task_config["project_goal"])
-            prompt_parts.append("")
-        
-        if "project_context" in task_config:
-            prompt_parts.append("# PROJECT CONTEXT")
-            prompt_parts.append(task_config["project_context"])
-            prompt_parts.append("")
-            
-        if "available_data" in task_config:
-            prompt_parts.append("# AVAILABLE DATA")
-            for data_item in task_config["available_data"]:
-                prompt_parts.append(f"- {data_item.get('name', '')}: {data_item.get('description', '')}")
-            prompt_parts.append("")
-            
-        if "autonomous_workflow" in task_config:
-            workflow = task_config["autonomous_workflow"]
-            if "approach" in workflow:
-                prompt_parts.append("# WORKFLOW APPROACH")
-                prompt_parts.append(workflow["approach"])
-                prompt_parts.append("")
-            
-            if "methodology" in workflow:
-                prompt_parts.append("# METHODOLOGY GUIDELINES")
-                prompt_parts.append(workflow["methodology"])
-                prompt_parts.append("")
-                
-        if "lab_notebook_guidelines" in task_config:
-            prompt_parts.append("# LAB NOTEBOOK GUIDELINES")
-            prompt_parts.append(task_config["lab_notebook_guidelines"])
-            prompt_parts.append("")
+
+    task_config_str = yaml.dump(task_config)
+    prompt_parts.append(f"TASK CONFIG: {task_config_str}")
     
     # Add notebook content if provided
     if notebook_content:
@@ -295,50 +321,6 @@ def format_prompt(overall_task, notebook_content=None, last_team_b_output=None, 
     
     return "\n".join(prompt_parts)
 
-def get_task_text(task_category, task_name, config_path=None, full_task=False, **kwargs):
-    """Get a task prompt text or full task structure with optional format parameters.
-    
-    Args:
-        task_category: Category of the task (e.g., 'overall')
-        task_name: Name of the specific task (e.g., 'text')
-        config_path: Optional path to tasks.yaml file
-        full_task: If True, returns the entire task dictionary instead of just the text field
-        **kwargs: Format parameters to be applied to the task text (only for text field)
-        
-    Returns:
-        str or dict: The formatted task text or full task dictionary
-    """
-    if config_path is None:
-        # Use path relative to current file
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
-                                  "config/tasks.yaml")
-    
-    with open(config_path, "r") as f:
-        prompts = yaml.safe_load(f)
-    
-    # Handle missing categories or task names
-    if task_category not in prompts.get("tasks", {}):
-        print(f"Warning: Task category '{task_category}' not found in tasks.yaml")
-        return {} if full_task else ""
-    
-    if task_name not in prompts["tasks"][task_category]:
-        print(f"Warning: Task name '{task_name}' not found in category '{task_category}'")
-        return {} if full_task else ""
-    
-    # Return the entire task dictionary if full_task is True
-    if full_task:
-        return prompts["tasks"][task_category][task_name]
-    
-    # Otherwise, get just the text field and format it if kwargs are provided
-    task_text = prompts["tasks"][task_category][task_name].get("text", "")
-    
-    if kwargs:
-        try:
-            task_text = task_text.format(**kwargs)
-        except KeyError as e:
-            print(f"Warning: Missing format parameter: {e}")
-    
-    return task_text
 
 def get_agent_token(agent_configs, agent_name, token_type="termination_token"):
     """Get a token for an agent from the agent configs.
@@ -355,114 +337,10 @@ def get_agent_token(agent_configs, agent_name, token_type="termination_token"):
     agent_config = agents_dict.get(agent_name, {})
     return agent_config.get(token_type)
 
-def setup_task_environment(base_dir=None, is_restart=False, iteration=None):
-    """Set up task environment including working directory.
-    
-    Args:
-        base_dir: Base directory for outputs
-        is_restart: Whether to clean the directory
-        iteration: Optional iteration number for subdirectory 
-        
-    Returns:
-        dict: Environment details including workdir path
-    """
-    # Default base directory
-    if base_dir is None:
-        base_dir = f"task_outputs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
-    # Create output directory (with optional iteration subdirectory)
-    if iteration is not None:
-        output_dir = os.path.join(base_dir, f"iteration_{iteration}")
-    else:
-        output_dir = base_dir
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Clean the directory if requested
-    if is_restart and os.path.exists(output_dir):
-        for item in os.listdir(output_dir):
-            item_path = os.path.join(output_dir, item)
-            try:
-                if os.path.isfile(item_path):
-                    os.unlink(item_path)
-                elif os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-            except Exception as e:
-                print(f"Error cleaning {item_path}: {e}")
-    
-    # Create an info file to track details
-    info = {
-        "base_dir": base_dir,
-        "output_dir": output_dir,
-        "timestamp": datetime.datetime.now().isoformat(),
-        "iteration": iteration,
-        "is_restart": is_restart
-    }
-    
-    with open(os.path.join(output_dir, "task_info.json"), "w") as f:
-        json.dump(info, f, indent=2)
-    
-    # Handle data files - check for common data files in current directory
-    common_data_files = ['betas.arrow', 'metadata.arrow']
-    current_dir = os.getcwd()
-    
-    # Track the found files and their locations
-    data_files_info = {}
-    
-    # Check current directory for data files
-    for filename in common_data_files:
-        if os.path.exists(os.path.join(current_dir, filename)):
-            data_files_info[filename] = {
-                "location": "current_dir",
-                "path": os.path.join(current_dir, filename),
-                "relative_path": filename
-            }
-        else:
-            data_files_info[filename] = {
-                "location": "not_found",
-                "status": "File not found in accessible directories"
-            }
-    
-    # Add data files info to the environment details
-    info["data_files"] = data_files_info
-    info["docker_working_directory"] = current_dir
-    
-    # Update the info file with data files information
-    with open(os.path.join(output_dir, "task_info.json"), "w") as f:
-        json.dump(info, f, indent=2)
-    
-    return {
-        "workdir": current_dir,            # The Docker container working directory
-        "output_dir": output_dir,          # Where to save outputs
-        "info": info,
-        "data_files": data_files_info
-    }
 
-def get_tasks_config(config_path=None, section=None):
-    """Load and return the tasks configuration, either the entire file or a specific section.
-    
-    Args:
-        config_path: Optional path to tasks.yaml file
-        section: Optional specific section to return (e.g., 'project_goal', 'reference', etc.)
-        
-    Returns:
-        dict: The entire tasks configuration or the requested section
-    """
-    if config_path is None:
-        # Use path relative to current file
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
-                                  "config/tasks.yaml")
-    
+def get_tasks_config(config_path):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    
-    # Return specific section if requested
-    if section:
-        if section in config:
-            return config[section]
-        else:
-            print(f"Warning: Section '{section}' not found in tasks.yaml")
-            return {}
     
     # Otherwise return the entire config
     return config

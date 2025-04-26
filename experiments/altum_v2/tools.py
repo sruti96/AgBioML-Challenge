@@ -36,13 +36,22 @@ notebook_write_tool = FunctionTool(
     description="""Append an entry to the lab notebook. 
     Parameters:
     - entry: The content to append to the notebook
-    - entry_type: Type of entry (e.g., NOTE, PLAN, RESULT, METRIC)
+    - entry_type: Type of entry (e.g., NOTE, PLAN, OUTPUT)
     - team: Source of the entry (e.g., SYSTEM, TEAM_A, TEAM_B)
     Always use this tool to document important decisions, specifications, results, or observations.
     """,
 )
 
 async def query_perplexity(query: str) -> tuple[str, list[str]]:
+    """
+    Query Perplexity for an AI-powered search engine that is great for research and technical questions.
+
+    Args:
+        query: The query to search for
+
+    Returns:
+        A tuple containing the content of the response and the citations
+    """
 
     model = "sonar"
     # model_options = ['sonar', 'sonar-pro', 'sonar-deep-research', 'sonar-reasoning-pro', 'sonar-reasoning']
@@ -352,9 +361,15 @@ async def read_arrow_file(filepath: str) -> str:
     Read the contents of an Arrow file (feather format).
     """
     import pandas as pd
-    
     try:
-        return pd.read_feather(filepath)
+        df = pd.read_feather(filepath)
+        # If shape of any dimension is > 10, return the first 10 rows / columns
+        orig_shape = df.shape
+        if df.shape[0] > 10:
+            df = df.head(10)
+        if df.shape[1] > 10:
+            df = df.iloc[:, :10]
+        return df.to_string() + f"\n\n(Truncated due to character limit in output of read_arrow_file). Original data shape: {orig_shape}"
     except Exception as e:
         return f"Error reading Arrow file: {str(e)}"
 
@@ -368,13 +383,15 @@ def get_available_tools():
     tools = {
         "perplexity_search": FunctionTool(
             query_perplexity, 
+            name="perplexity_search",
             strict=True, 
-            description="Query Perplexity for an AI-powered search engine that is great for research and technical questions."
+            description="Query Perplexity for an AI-powered search engine that is great for research and technical questions. Args: query (str) - The query to search for"
         ),
         "webpage_parser": FunctionTool(
             format_webpage, 
+            name="webpage_parser",
             strict=True, 
-            description="Parse webpage content and extract readable text"
+            description="Parse webpage content and extract readable text. Args: url (str) - The URL of the webpage to parse"
         ),
         "analyze_plot": FunctionTool(
             analyze_plot_file,
@@ -390,7 +407,7 @@ def get_available_tools():
         ),
         "read_text_file": FunctionTool(
             read_text_file,
-            description="Read the contents of a text file (.txt, .csv, .tsv, .json, etc.).",
+            description="Read the contents of a text file (.txt, .csv, .tsv, .json, etc.). Only returns the first 10,000 characters of the file.",
             name="read_text_file"
         ),
         "write_text_file": FunctionTool(
@@ -400,7 +417,7 @@ def get_available_tools():
         ),
         "read_arrow_file": FunctionTool(
             read_arrow_file,
-            description="Read the contents of an Arrow file (feather format) as a pandas DataFrame.",
+            description="Read the contents of an Arrow file (feather format) as a pandas DataFrame. Only returns the head of the DataFrame. Useful for examining the first few rows of a dataset.",
             name="read_arrow_file"
         ),
         "read_notebook": notebook_read_tool,

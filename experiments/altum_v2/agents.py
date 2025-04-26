@@ -60,7 +60,7 @@ class TeamAPlanning(BaseChatAgent):
         self._termination_condition = TextMentionTermination(principal_scientist_termination_token)
         
         self._group_chat = RoundRobinGroupChat(
-            participants=[principal_scientist, ml_expert, bioinformatics_expert],
+            participants=[principal_scientist, bioinformatics_expert, ml_expert],
             termination_condition=self._termination_condition,
             max_turns=max_turns
         )
@@ -80,9 +80,25 @@ class TeamAPlanning(BaseChatAgent):
         print(f"TeamAPlanning - Received {len(messages)} messages")
         print(f"TOKEN ESTIMATE: {estimate_tokens(messages)}")
         
+        # Add performance target reminder
+        performance_reminder = TextMessage(
+            content="""CRITICAL PERFORMANCE TARGETS REMINDER:
+The project CANNOT be considered complete until ONE of these criteria is met:
+1. Test set performance: Pearson correlation > 0.9 AND MAE < 10 years on average
+OR
+2. LOOCV performance: Pearson correlation > 0.94 AND MAE < 5 years
+
+Principal Scientist: You MUST NOT terminate the project until one of these targets is achieved.
+""",
+            source="System"
+        )
+        
+        # Add the reminder to the messages
+        messages_with_reminder = list(messages) + [performance_reminder]
+        
         # Run the internal group chat
         result = await Console(
-            self._group_chat.run_stream(task=messages, cancellation_token=cancellation_token), 
+            self._group_chat.run_stream(task=messages_with_reminder, cancellation_token=cancellation_token), 
             output_stats=True
         )
         
@@ -122,7 +138,6 @@ class EngineerSociety(BaseChatAgent):
         engineer_terminate_token: str, 
         critic_terminate_token: str, 
         critic_revise_token: str, 
-        output_dir: str = ".",
         max_messages_to_return: int = 25
     ) -> None:
         """
@@ -146,7 +161,7 @@ class EngineerSociety(BaseChatAgent):
         self._critic_terminate_token = critic_terminate_token
         self._critic_approve_token = critic_approve_token
         self._critic_revise_token = critic_revise_token
-        self._output_dir = output_dir
+        self._output_dir = "."
         self._max_messages_to_return = max_messages_to_return
         self.all_messages = []  # Track all messages for context and selection
 
@@ -235,7 +250,7 @@ Remember to check your results at each step and build up complexity gradually.
         
         # Add lab notebook reminder
         notebook_reminder = TextMessage(
-            content="""IMPORTANT: DOCUMENT YOUR WORK
+            content='''IMPORTANT: DOCUMENT YOUR WORK
 
 At the end of your implementation, use the write_notebook tool to document your work in the lab notebook:
 1. Record important data insights 
@@ -243,16 +258,21 @@ At the end of your implementation, use the write_notebook tool to document your 
 3. Record key metrics and evaluation results
 
 Example:
-```python
 write_notebook(
-    entry="Implemented data splitting with stratification by age and tissue type. Achieved balanced splits with chi-square p-value of 0.92. Test set contains 20% of samples.",
-    entry_type="RESULT",
-    team="TEAM_B"
+    entry=f"""Implemented data splitting with stratification by age and tissue type. chi-square results table 
+
+    | Variable | Chi-Square Statistic | P-Value |
+    |----------|----------------------|---------|
+    | Age      | 12.5                 | 0.005   |
+    | Tissue   | 15.2                 | 0.001   |
+
+    """,
+    entry_type="OUTPUT",
+    source="implementation_engineer"
 )
-```
 
 The notebook is a critical scientific record that Team A will use to plan the next steps.
-""",
+''',
             source="User"
         )
         
@@ -307,13 +327,25 @@ In follow-up reviews, you can focus primarily on whether the engineer addressed 
 IMPORTANT: After completing your review, if you APPROVE the implementation, also document significant metrics and results in the lab notebook:
 
 Example:
-```python
 write_notebook(
-    entry="Model evaluation results: Pearson correlation = 0.87, MAE = 3.2 years on test set. Key finding: model performs well on blood samples but shows higher error on brain tissue samples.",
-    entry_type="METRIC",
-    team="TEAM_B"
+    entry='''
+    Model evaluation results:
+    key results table:
+
+    | Metric | Value |
+    |--------|-------|
+    | Pearson correlation | 0.87 |
+    | MAE | 3.2 years |
+
+    Key finding: model performs well on blood samples but shows higher error on brain tissue samples.
+
+    Files generated:
+    - model_evaluation.png
+    - model_evaluation.arrow
+    ''',
+    entry_type="OUTPUT",
+    source="data_science_critic"
 )
-```
 """,
                 source="User"
             )
