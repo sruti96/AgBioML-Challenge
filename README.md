@@ -1,4 +1,4 @@
-# Flock AG (Multi-Agent BioML Research Teams)
+# Multi-agent system experiments for BioML
 
 ## Getting started
 
@@ -13,8 +13,8 @@ $HOME/miniconda3/bin/conda init
 Then, create a conda environment with the necessary packages:
 
 ```bash
-conda create -y -n flock-ag python=3.12
-conda activate flock-ag
+conda create -y -n masbioml python=3.12
+conda activate masbioml
 
 pip install -r requirements.txt
 ```
@@ -26,6 +26,8 @@ This repo is, at present, primarily a collection of experiments and notes as I e
 Current experiments:
 
 - [altum_v1](experiments/altum_v1/README.md)
+- [altum_v2](experiments/altum_v2/README.md)
+
 
 
 
