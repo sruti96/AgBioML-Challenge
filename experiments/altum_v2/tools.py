@@ -8,6 +8,9 @@ from bs4 import BeautifulSoup
 import re
 from PIL import Image as PILImage
 import glob
+import math
+import numpy as np
+from typing import Union, Dict, List, Any
 
 load_dotenv()
 
@@ -41,6 +44,74 @@ notebook_write_tool = FunctionTool(
     Always use this tool to document important decisions, specifications, results, or observations.
     """,
 )
+
+async def calculator(expression: str) -> Dict[str, Any]:
+    """
+    Evaluate a mathematical expression or perform a calculation.
+    
+    This tool can handle:
+    - Basic arithmetic operations (+, -, *, /, **, %)
+    - Mathematical functions (sqrt, sin, cos, tan, log, etc.)
+    - Statistics (mean, median, std, etc.)
+    - Weighted averages
+    - Basic matrix operations
+    
+    Args:
+        expression: A string containing a mathematical expression to evaluate
+        
+    Returns:
+        A dictionary containing the result and additional context
+    """
+    try:
+        # Create a safe environment with math functions but no builtins
+        safe_env = {
+            # Basic math functions
+            'abs': abs, 'round': round, 'min': min, 'max': max, 'sum': sum,
+            # Math module functions
+            'sqrt': math.sqrt, 'exp': math.exp, 'log': math.log, 'log10': math.log10,
+            'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+            'asin': math.asin, 'acos': math.acos, 'atan': math.atan,
+            'degrees': math.degrees, 'radians': math.radians,
+            'pi': math.pi, 'e': math.e,
+            # NumPy functions for arrays and statistics
+            'np': np, 'array': np.array, 'mean': np.mean, 'median': np.median,
+            'std': np.std, 'var': np.var, 'percentile': np.percentile
+        }
+        
+        # Evaluate the expression
+        result = eval(expression, {"__builtins__": {}}, safe_env)
+        
+        # Format the response
+        if isinstance(result, (np.ndarray, list)):
+            # For array-like results, convert to list for JSON serialization
+            result_value = result.tolist() if isinstance(result, np.ndarray) else result
+            return {
+                "result": result_value,
+                "type": "array",
+                "shape": np.array(result).shape if hasattr(np.array(result), "shape") else len(result),
+                "expression": expression
+            }
+        else:
+            # For scalar results
+            return {
+                "result": float(result) if isinstance(result, (int, float, np.number)) else result,
+                "type": "scalar",
+                "expression": expression
+            }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": "error",
+            "expression": expression,
+            "help": """
+            Examples of valid expressions:
+            - Basic arithmetic: "2 + 2 * 3" or "10 / 2 - 3"
+            - Math functions: "sqrt(16)" or "sin(radians(30))"
+            - Statistics: "mean([1, 2, 3, 4, 5])" or "median([1, 2, 3, 4, 5])"
+            - IMPORTANT: Aggregator functions (sum, min, max) require iterables: "sum([1, 2, 3])" NOT "sum(1, 2, 3)"
+            - Weighted average: "sum([0.05*3, 0.1*2, 0.2*3, 0.15*2, 0.05*3, 0.15*2, 0.1*3, 0.1*2, 0.05*3, 0.05*2])"
+            """
+        }
 
 async def query_perplexity(query: str) -> tuple[str, list[str]]:
     """
@@ -419,6 +490,23 @@ def get_available_tools():
             read_arrow_file,
             description="Read the contents of an Arrow file (feather format) as a pandas DataFrame. Only returns the head of the DataFrame. Useful for examining the first few rows of a dataset.",
             name="read_arrow_file"
+        ),
+        "calculator": FunctionTool(
+            calculator,
+            description="""Calculate mathematical expressions, statistics, or weighted averages.
+            This tool can evaluate arithmetic, trigonometric functions, logs, and statistical operations.
+            Very useful for calculating weighted scores in rubrics, statistical metrics, and other numerical analyses.
+            
+            IMPORTANT: Aggregator functions (sum, min, max) require iterables like lists.
+            Always use: sum([value1, value2, ...]) NOT sum(value1, value2, ...)
+            
+            Example expressions:
+            - Basic: "2 + 2 * 3"
+            - Functions: "sqrt(16)" or "sin(radians(30))"
+            - Statistics: "mean([1, 2, 3, 4, 5])"
+            - Weighted average: "sum([0.05*3, 0.1*2, 0.2*3, 0.15*2, 0.05*3, 0.15*2, 0.1*3, 0.1*2, 0.05*3, 0.05*2])"
+            """,
+            name="calculator"
         ),
         "read_notebook": notebook_read_tool,
         "write_notebook": notebook_write_tool

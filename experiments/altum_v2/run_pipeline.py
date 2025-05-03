@@ -1,29 +1,3 @@
-#!/usr/bin/env python
-"""
-Altum Pipeline - Autonomous Agent-based Workflow for Epigenetic Clock Development
-
-This script implements a unified, autonomous agent-based workflow for developing 
-an epigenetic clock to predict chronological age from DNA methylation data. 
-It uses a two-team approach:
-1. Team A (Planning): Principal scientist, ML expert, and bioinformatics expert who 
-   analyze results and plan next steps.
-2. Team B (Engineering Society): Engineer, code executor, and data science critic who
-   implement and evaluate the plans from Team A.
-
-Unlike v1, which used a rigid, multi-stage workflow, this version:
-- Runs as a single script
-- Gives agents autonomy to determine next steps
-- Uses a lab notebook for long-term memory
-- Implements a round-robin group chat between Teams A and B
-
-CRITICAL PERFORMANCE TARGETS: The project must achieve ONE of the following:
-1. Test set: Pearson correlation > 0.9 AND MAE < 10 years
-   OR
-2. LOOCV: Pearson correlation > 0.94 AND MAE < 5 years
-
-The principal scientist CANNOT terminate the project until one of these targets is met.
-"""
-
 import os
 import sys
 import asyncio
@@ -165,7 +139,7 @@ async def main(args):
         code_executor = DockerCommandLineCodeExecutor(
             image='agenv:latest',
             work_dir=os.getcwd(),  # Use current (working) directory
-            timeout=600,
+            timeout=3600,
             device_requests=[DeviceRequest(count=-1, capabilities=[["gpu"]])]
         )
         await code_executor.start()
@@ -206,8 +180,9 @@ async def main(args):
         # Run the main loop
         iteration = 0
         last_team_b_output = None
+        project_complete = False
         
-        while iteration < args.max_iterations:
+        while iteration < args.max_iterations and not project_complete:
             iteration += 1
             print(f"Starting iteration {iteration}/{args.max_iterations}")
             
@@ -228,13 +203,32 @@ async def main(args):
             team_a_message = TextMessage(content=team_a_prompt, source="User")
             team_a_response = await team_a.on_messages([team_a_message], CancellationToken())
             
+            # Check if the project is complete by detecting the "ENTIRE_TASK_DONE" token
+            if "ENTIRE_TASK_DONE" in team_a_response.chat_message.content:
+                print("DETECTED PROJECT COMPLETION TOKEN. ALL REQUIREMENTS HAVE BEEN MET.")
+                project_complete = True
+                write_notebook(
+                    entry="PROJECT COMPLETED: All requirements have been satisfied. The Principal Scientist has verified completion.",
+                    entry_type="COMPLETION",
+                    source="principal_scientist"
+                )
+            
             # Log and record Team A's plan
             print(f"Team A planning complete for iteration {iteration}")
+            
+            # Make sure to remove the termination token AFTER checking for ENTIRE_TASK_DONE
+            plan_content = team_a_response.chat_message.content
+            
             write_notebook(
-                entry=team_a_response.chat_message.content,
+                entry=plan_content,
                 entry_type="PLAN",
                 source="principal_scientist"
             )
+            
+            # If the project is complete, skip Team B implementation
+            if project_complete:
+                print("Project is complete. Skipping Team B implementation.")
+                break
             
             # Step 2: Team B Implementation Phase
             print(f"Iteration {iteration}: Team B Implementation Phase")

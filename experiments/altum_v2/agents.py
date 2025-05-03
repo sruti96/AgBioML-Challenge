@@ -83,12 +83,26 @@ class TeamAPlanning(BaseChatAgent):
         # Add performance target reminder
         performance_reminder = TextMessage(
             content="""CRITICAL PERFORMANCE TARGETS REMINDER:
-The project CANNOT be considered complete until ONE of these criteria is met:
+The project MUST achieve BOTH of these performance criteria:
 1. Test set performance: Pearson correlation > 0.9 AND MAE < 10 years on average
-OR
-2. LOOCV performance: Pearson correlation > 0.94 AND MAE < 5 years
+AND
+2. Dataset-level K-Fold Cross-Validation: Pearson correlation > 0.94 AND MAE < 6 years
+   - CRITICAL: Folds MUST be created at the dataset level
+   - No dataset can appear in both training and test (or validation) sets within any single fold
+   - Minimum of 5 folds required
 
-Principal Scientist: You MUST NOT terminate the project until one of these targets is achieved.
+Both evaluation approaches MUST be performed - no exceptions.
+
+ADDITIONAL MANDATORY REQUIREMENTS:
+1. Model checkpoint and inference script MUST be created and verified working
+2. Scientific paper in markdown format MUST be written with all required sections
+   and evaluated against the detailed rubric (score ≥2 in each category, overall average ≥2.5)
+3. Final verification of all requirements must be completed
+
+FINAL COMPLETION:
+Principal Scientist: Only after ALL requirements have been met AND you have completed a formal
+self-evaluation of the paper against the rubric (confirming weighted average > 2.5 using the calculator tool),
+explicitly state "ENTIRE_TASK_DONE" to indicate the complete project has been successfully finished.
 """,
             source="System"
         )
@@ -208,39 +222,53 @@ Do NOT save files to the current directory or any other location. Always use '{s
 
 When implementing your solution, follow these heuristics:
 
-1. DATA UNDERSTANDING:
+1. DATA COMPLETENESS - MANDATORY UNDERSTANDING:
+   - The provided data (betas.arrow and metadata.arrow) is COMPLETE - DO NOT request additional data
+   - Sample IDs match perfectly between these files - there are NO missing mappings
+   - DO NOT request or claim to need additional "mapping files" - none are needed
+   - Use pandas read_feather() to load arrow files, then join on sample IDs
+   - The data is sufficient to achieve all performance targets - DO NOT claim otherwise
+
+2. DATA UNDERSTANDING:
    - Always start by exploring and understanding the data structure (column names, data types, missing values)
    - Print shapes, descriptive statistics, and a few sample rows first
    - Check for missing data, outliers, or unusual distributions before proceeding
 
-2. TROUBLESHOOTING APPROACH:
+3. TROUBLESHOOTING APPROACH:
    - When you encounter an error, simplify your code to isolate the problem
    - Test individual components separately before combining them
    - Print intermediate results to verify each step works as expected
    - When debugging, start with the simplest possible version of your code
 
-3. DEVELOPMENT STRATEGY:
+4. DEVELOPMENT STRATEGY:
    - Start small with atomic, focused steps that do one thing well
    - Test each component separately before combining them
    - Build up complexity incrementally, verifying at each step
    - Use intermediate data files to break complex processes into manageable stages
 
-4. PERFORMANCE AND QUALITY:
+5. PERFORMANCE AND QUALITY:
    - Use sampling for initial testing when working with large datasets
    - Monitor memory usage and optimize for large data processing
    - Create clear, informative visualizations with proper labels and titles
    - Add useful comments explaining WHY, not just WHAT your code does
 
-5. DATA SPLITTING BEST PRACTICES:
+6. DATA SPLITTING BEST PRACTICES:
    - Always maintain stratification for important variables when splitting
    - Check the distributions in your train/test splits to ensure they're representative
    - Verify there's no data leakage between splits
    - Use k-fold cross-validation when appropriate to ensure stable results
 
-6. OUTPUT VALIDATION:
+7. DATASET-LEVEL SPLIT VERIFICATION (MANDATORY):
+   - BEFORE ANY EVALUATION, verify no dataset appears in both training and testing (or validation) splits
+   - Include explicit verification code that checks for overlap between datasets in splits
+   - Print and document which datasets are in each split
+   - Record verification results in the lab notebook
+   - ALL RESULTS ARE INVALID if you can't prove that every dataset appears in only one split
+
+8. OUTPUT VALIDATION:
    - Generate summary statistics for each data split and compare them
    - Create plots showing distributions across splits to visually confirm balance
-   - Use statistical tests to verify similarity between splits
+   - Use statistical tests to determine the level of similarity between splits
    - Create clear tables showing counts and percentages of key variables across splits
 
 Remember to check your results at each step and build up complexity gradually.
@@ -408,19 +436,27 @@ Examples of correct paths:
             troubleshooting_reminder = TextMessage(
                 content="""TROUBLESHOOTING REMINDER:
 
-1. When fixing errors or addressing feedback:
+1. For data loading and integration issues:
+   - The provided data (betas.arrow and metadata.arrow) is COMPLETE and SUFFICIENT
+   - Sample IDs match perfectly between files - there are NO missing mappings
+   - DO NOT request additional "mapping files" - they are NOT needed
+   - Use pandas read_feather() to load arrow files and join on sample IDs
+   - DO NOT claim data is insufficient - it contains everything needed for the task
+
+2. When fixing errors or addressing feedback:
    - Start by understanding exactly what's not working or what feedback needs to be addressed
    - Break down the problem into smaller parts
    - Test each part separately to find which component needs fixing
    - Make one change at a time and test its effect
 
-2. For data splitting issues:
-   - Check the distributions of key variables in each split
-   - Make sure stratification is working correctly
-   - Verify statistical similarity between splits with appropriate tests
-   - Create clear tables showing the counts and percentages for key variables
+3. CRITICAL: Dataset-level Split Verification:
+   - You MUST verify that no dataset appears in both training and testing splits
+   - Include explicit verification code that calculates dataset overlap (must be zero)
+   - Print and document which datasets are in each split
+   - Results are INVALID without this verification
+   - This is a HARD REQUIREMENT - don't proceed to evaluation without it
 
-3. For visualization issues:
+4. For visualization issues:
    - Add proper titles, labels, and legends to all plots
    - Use appropriate color schemes
    - Include statistical context in the visualization

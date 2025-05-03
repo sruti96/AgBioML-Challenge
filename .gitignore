@@ -1,6 +1,7 @@
 Miniconda3-latest-Linux-x86_64.sh
 .env
 tmp
+saved_runs
 *.json
 *.png
 __pycache__/
