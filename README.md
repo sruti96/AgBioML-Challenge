@@ -45,6 +45,19 @@ conda activate agbioml
 pip install -r requirements.txt
 ```
 
+Run the following to install AutoGen, a framework for creating multi-agent AI applications.
+
+```bash
+git clone https://github.com/millerh1/autogen.git
+cd autogen
+git checkout 9c5651e7151fe8baf9aa7b46be2573cc68aaa2d5
+git lfs pull
+
+pip install -e python/packages/autogen-agentchat
+pip install -e python/packages/autogen-core
+pip install -e python/packages/autogen-ext
+```
+
 ## Repository Structure
 
 - `src/`: Core agent framework code (coming soon)

@@ -3,9 +3,6 @@ annotated-types==0.7.0
 anyio==4.9.0
 asttokens==3.0.0
 asyncio-atexit==1.0.1
--e git+https://github.com/millerh1/autogen.git@9c5651e7151fe8baf9aa7b46be2573cc68aaa2d5#egg=autogen_agentchat&subdirectory=python/packages/autogen-agentchat
--e git+https://github.com/millerh1/autogen.git@9c5651e7151fe8baf9aa7b46be2573cc68aaa2d5#egg=autogen_core&subdirectory=python/packages/autogen-core
--e git+https://github.com/millerh1/autogen.git@9c5651e7151fe8baf9aa7b46be2573cc68aaa2d5#egg=autogen_ext&subdirectory=python/packages/autogen-ext
 beautifulsoup4==4.13.4
 bs4==0.0.2
 certifi==2025.1.31
